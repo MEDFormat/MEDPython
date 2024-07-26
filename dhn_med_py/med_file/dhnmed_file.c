@@ -174,28 +174,9 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     } else {
         password[0] = 0;
     }
-    
 
-    // check license
-    //license_ok = LSc_check_license_m12(LS_READ_MED_PROD_CODE_m12, LS_READ_MED_PROD_VER_MAJOR, LS_READ_MED_PROD_VER_MINOR);
-    
-    // Keep license check in place, for now, to collect info on customers.
-    // However, since this software (reading MED) no longer requires a license, per decision by Matt Stead,
-    // ignore the output of the license check
-    
-    //if (license_ok != TRUE_m12)  // FALSE_m12 or UNKNOWN_m12 not ok
-    //{
-    //    PyErr_SetString(PyExc_RuntimeError, "DHN License check failed, exiting function...");
-    //    PyErr_Occurred();
-    //    return NULL;
-    //}
-    
-    // open the session to get basic info about the MED data record.
-    //flags = (LH_READ_SLICE_SEGMENT_DATA_m12 | LH_INCLUDE_TIME_SERIES_CHANNELS_m12 |  LH_MAP_ALL_TIME_SERIES_CHANNELS_m12 | LH_MAP_ALL_SEGMENTS_m12 | LH_GENERATE_EPHEMERAL_DATA_m12 | LH_READ_SLICE_ALL_RECORDS_m12);
-  
     globals_m12->behavior_on_fail = RETURN_ON_FAIL_m12;
     G_initialize_time_slice_m12(&slice);  // this defaults to full session if nothing specified
-    flags = LH_INCLUDE_TIME_SERIES_CHANNELS_m12 | LH_READ_SLICE_SEGMENT_DATA_m12 | LH_READ_SLICE_ALL_RECORDS_m12 | LH_GENERATE_EPHEMERAL_DATA_m12 | LH_MAP_ALL_SEGMENTS_m12;
 
 	flags = LH_INCLUDE_TIME_SERIES_CHANNELS_m12 |
 		LH_MAP_ALL_TIME_SERIES_CHANNELS_m12 |
