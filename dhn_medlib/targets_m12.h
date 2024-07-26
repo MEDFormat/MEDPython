@@ -1,20 +1,3 @@
-// LICENSE & COPYRIGHT:
-
-// MED library source code (medlib) is copyrighted by Dark Horse Neuro Inc, 2021 (Matt Stead & Casey Stengel)
-
-// Medlib is free software:
-// You can redistribute it and/or modify it under the terms of the Gnu General Public License (Gnu GPL),
-// version 2, or any later version (as published by the Free Software Foundation).
-// The Gnu GPL requires that any object code built and distributed using this software
-// is accompanied by the FULL SOURCE CODE used to generate the object code.
-
-// This software is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
-// without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-// See the Gnu GPL for more details.
-
-// If you did not receive a copy of the Gnu GPL along with this code, you can find it on the GNU website ( http://www.gnu.org ).
-// You may also obtain a copy by writing to the Free Software Foundation, Inc at:
-// 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 // Make this file the first include
 #ifndef TARGETS_IN_m12
