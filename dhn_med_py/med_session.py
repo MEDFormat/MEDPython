@@ -84,8 +84,7 @@ class MedSession():
     __valid_major_dimensions = ['channel', 'sample']
 
 
-    def __init__(self, session_path, password=None, reference_channel=None,
-                 caching_enabled=True):
+    def __init__(self, session_path, password=None, reference_channel=None):
     
         global _session_open_counter
         
@@ -102,7 +101,7 @@ class MedSession():
             
         # this catches exception due to being unable to read license
         try:
-            self.__metadata = open_MED(session_path, password, caching_enabled)
+            self.__metadata = open_MED(session_path, password)
         except:
             MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
             
@@ -143,7 +142,7 @@ class MedSession():
         self.__return_records = True
         self.__padding = "none"
         self.__return_trace_ranges = False
-
+        
         return
         
 
@@ -441,29 +440,7 @@ class MedSession():
             self.__set_single_channel_active(chan_name, is_active)
         else:
             raise MedSession.InvalidArgumentException("Argument must be either a list or a string.")
-        self.session_info = read_session_info(self.__metadata)
-
-        if type(chan_name) is list:
-            for chan in chan_name:
-                if type(chan) is not str:
-                    raise MedSession.InvalidArgumentException("List argument must be a list of strings.")
-                if chan == "all":
-                    raise MedSession.InvalidArgumentException("List argument cannot contain the string 'all'.")
-            for chan in chan_name:
-                if is_active is True:
-                    self.__active_channels.add(chan)
-                else:
-                    self.__active_channels.discard(chan)
-        elif type(chan_name) is str:
-            if chan_name == 'all':
-                self.__active_channels = {"all"}
-            else:
-                if is_active is True:
-                    self.__active_channels.add(chan_name)
-                else:
-                    self.__active_channels.discard(chan_name)
-        else:
-            raise MedSession.InvalidArgumentException("Argument must be either a list or a string.")
+        
         self.session_info = read_session_info(self.__metadata)
         
         return

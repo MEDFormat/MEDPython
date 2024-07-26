@@ -98,19 +98,16 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     TERN_m12     license_ok;
     TIME_SLICE_m12    slice;
     int                     err_code;
-    si1                     caching_enabled;
     si8                     *py_pointer_changed;
     
     password_input_obj = NULL;
-    caching_enabled = TRUE_m12;
     
     //printf("pointer size = %d\n", sizeof(PyObject*));
     
     // --- Parse the input ---
-    if (!PyArg_ParseTuple(args,"O|Op",
+    if (!PyArg_ParseTuple(args,"O|O",
                           &file_list_obj,
-                          &password_input_obj,
-                          &caching_enabled)){
+                          &password_input_obj)){
         
         PyErr_SetString(PyExc_RuntimeError, "One to 3 inputs required: file_list, [password], [reference_channel]\n");
         PyErr_Occurred();
@@ -206,9 +203,6 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
 		LH_READ_SLICE_ALL_RECORDS_m12 |
 		LH_READ_SLICE_SEGMENT_DATA_m12 |
 		LH_GENERATE_EPHEMERAL_DATA_m12;
-
-    if (caching_enabled != TRUE_m12)
-	    flags = flags | LH_NO_CPS_CACHING_m12;
 		
     slice.start_time = BEGINNING_OF_TIME_m12;
     slice.end_time = END_OF_TIME_m12;
@@ -765,10 +759,6 @@ static PyObject     *read_MED_exec(SESSION_m12 *sess, si4 n_files, si8 start_tim
             py_array_out = (PyArrayObject *) PyArray_SimpleNew(1, dims, NPY_INT);
             numpy_arr_data = (si4 *) PyArray_GETPTR1(py_array_out, 0);
             memcpy(numpy_arr_data, cps->decompressed_data, TIME_SLICE_SAMPLE_COUNT_S_m12(seg->time_slice) * sizeof(si4));
-            if (cps->decompressed_data != NULL){
-                free_m12((void *) cps->decompressed_data, __FUNCTION__);
-		        cps->decompressed_ptr = cps->decompressed_data = NULL;
-            }
             
         } else {
             py_array_out = (PyArrayObject *) PyArray_SimpleNew(1, dims, NPY_INT);
@@ -781,10 +771,6 @@ static PyObject     *read_MED_exec(SESSION_m12 *sess, si4 n_files, si8 start_tim
                 for (k=0;k<n_seg_samps;++k)
                     numpy_arr_data[k] = seg_samps[k];
                 numpy_arr_data += n_seg_samps;
-                if (cps->decompressed_data != NULL){
-                    free_m12((void *) cps->decompressed_data, __FUNCTION__);
-		            cps->decompressed_ptr = cps->decompressed_data = NULL;
-                }
             }
         }
         
@@ -822,7 +808,8 @@ static PyObject     *read_MED_exec(SESSION_m12 *sess, si4 n_files, si8 start_tim
     //printf("got here post-metadata\n");
     
     // session records
-    //py_records = fill_session_records(sess, NULL);
+    py_records = fill_session_records(sess, NULL);
+
     // Create session contiguous samples output structure
     if (n_channels > 0) {
         
@@ -2362,19 +2349,19 @@ PyObject            *get_raw_page(PyObject *self, PyObject *args)
     py_array_out = (PyArrayObject *) PyArray_SimpleNewFromData(2, dims, NPY_DOUBLE, (void *) dm->data);
     // The following line is necessary to tell NumPy that it now owns the data.  Without that line,
     // the array will never get garbage-collected.
-    // AT_remove_entry_m12(dm->data, "Python get_raw_page");
+    AT_remove_entry_m12(dm->data, "Python get_raw_page");
     PyArray_ENABLEFLAGS((PyArrayObject*) py_array_out, NPY_ARRAY_OWNDATA);
     
     if (trace_ranges) {
         mins = (PyArrayObject *) PyArray_SimpleNewFromData(2, dims, NPY_DOUBLE, (void *) dm->range_minima);
         // The following line is necessary to tell NumPy that it now owns the data.  Without that line,
         // the array will never get garbage-collected.
-        // AT_remove_entry_m12(dm->range_minima, "Python get_raw_page");
+        AT_remove_entry_m12(dm->range_minima, "Python get_raw_page");
         PyArray_ENABLEFLAGS((PyArrayObject*) mins, NPY_ARRAY_OWNDATA);
         maxs = (PyArrayObject *) PyArray_SimpleNewFromData(2, dims, NPY_DOUBLE, (void *) dm->range_maxima);
         // The following line is necessary to tell NumPy that it now owns the data.  Without that line,
         // the array will never get garbage-collected.
-        // AT_remove_entry_m12(dm->range_maxima, "Python get_raw_page");
+        AT_remove_entry_m12(dm->range_maxima, "Python get_raw_page");
         PyArray_ENABLEFLAGS((PyArrayObject*) maxs, NPY_ARRAY_OWNDATA);
     }
     
