@@ -29,7 +29,8 @@ import numpy
 
 FILE_EXT = Extension("dhn_med_py.med_file.dhnmed_file",
              ["dhn_med_py/med_file/dhnmed_file.c"],
-                     include_dirs=["dhn_medlib", "dhn_med_py/med_file"],
+                     headers=["dhn_med_py/med_file/dhnmed_file.h"],
+                     include_dirs=["dhn_medlib"],
                      extra_compile_args=['-fms-extensions', '-w', '-O0'])
 
 setup(name="dhn_med_py",

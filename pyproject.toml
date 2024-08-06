@@ -39,6 +39,6 @@ packages = ['dhn_med_py', 'dhn_med_py.med_file']
 version = {attr = "dhn_med_py.version.__version__"}
 
 [project.urls]
-homepage = "https://github.com/msel-source/pymef"
-documentation = "https://pymef.readthedocs.io/"
-repository = "https://github.com/msel-source/pymef"
+homepage = "https://github.com/MEDFormat/MEDPython/"
+#documentation = "https://pymef.readthedocs.io/"
+repository = "https://github.com/MEDFormat/MEDPython/"
