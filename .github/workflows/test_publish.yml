@@ -48,7 +48,6 @@ jobs:
 #      matrix:
 #        buildplat:
 #          - [ubuntu-20.04, manylinux_x86_64]
-#          - [ubuntu-22.04, manylinux_x86_64]
 #          - [macos-12, macosx_x86_64]
 #          - [macos-13, macosx_x86_64]
 #          - [macos-14, macosx_x86_64]

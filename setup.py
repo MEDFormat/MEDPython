@@ -25,16 +25,17 @@
 
 
 from setuptools import Extension, setup
+import numpy
 
-setup_args = dict(
-    ext_modules=[
-        Extension("dhn_med_py.med_file.dhnmed_file",
-                  ["dhn_med_py/med_file/dhnmed_file.c"],
-                  include_dirs=["dhn_medlib"],
-                  # extra_compile_args=['-w'])
-                  # extra_compile_args=['-O3'])
-                  extra_compile_args=['-fms-extensions', '-w']
-        )
-    ]
-)
-setup(**setup_args)
+FILE_EXT = Extension("dhn_med_py.med_file.dhnmed_file",
+             ["dhn_med_py/med_file/dhnmed_file.c"],
+                     include_dirs=["dhn_medlib"],
+                     extra_compile_args=['-fms-extensions', '-w', '-O3'])
+
+setup(name="dhn_med_py",
+      install_requires=['numpy'],
+      zip_safe=False,
+      packages=["dhn_med_py", "dhn_med_py.med_file"],
+      ext_modules=[FILE_EXT],
+      include_dirs=[numpy.get_include()],
+      test_suite='tests')
