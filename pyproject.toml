@@ -1,0 +1,44 @@
+[build-system]
+requires = [
+    "setuptools>=42",
+    "wheel",
+    "numpy"
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dhn_med_py"
+description = "DHN-MED-Py is a wrapper library for Multiscale Electrophysiology Data Format developed by Matt Stead."
+readme = "README.md"
+license = { text="GNU General Public License" }
+requires-python = ">=3.9"
+dependencies = [
+    "numpy"
+]
+authors = [{ name=" Jan Cimbalnik", email="jan.cimbalnik@fnusa.cz" }]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: Apache Software License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.9",
+    "Topic :: Scientific/Engineering",
+]
+keywords = ["MED", "Electrophysiology"]
+dynamic = ["version"]
+
+[tool.setuptools]
+include-package-data = true
+packages = ['dhn_med_py', 'dhn_med_py.med_file']
+
+[tool.setuptools.dynamic]
+version = {attr = "dhn_med_py.version.__version__"}
+
+[project.urls]
+homepage = "https://github.com/msel-source/pymef"
+documentation = "https://pymef.readthedocs.io/"
+repository = "https://github.com/msel-source/pymef"

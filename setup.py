@@ -25,46 +25,16 @@
 
 
 from setuptools import Extension, setup
-import numpy
 
-from pathlib import Path
-
-this_directory = Path(__file__).parent
-long_description = (this_directory / "README.md").read_text()
-
-# the c extension module
-DHNMED_FILE_EXT = Extension("dhn_med_py.med_file.dhnmed_file",
-                            ["dhn_med_py/med_file/dhnmed_file.c"],
-                            include_dirs=["dhn_medlib"],
-                            # extra_compile_args=['-w'])
-                            # extra_compile_args=['-O3'])
-                            extra_compile_args=['-fms-extensions'])
-
-setup(
-    name="dhn_med_py",
-    version='1.1.2',
-    description="Python wrapper for MED format",
-    author="Dark Horse Neuro, Inc.",
-    download_url="https://medformat.org",
-    platforms=["any"],
-    url="https://medformat.org",
-    license='GPLv3',
-    project_urls={"Source": "https://medformat.org"},
-    packages=["dhn_med_py", "dhn_med_py.med_file"],
-    ext_modules=[DHNMED_FILE_EXT],
-    setup_requires=["setuptools_scm"],
-    install_requires=['numpy'],
-    include_dirs=[numpy.get_include()],
-    long_description=long_description,
-    long_description_content_type='text/markdown',
-    license_files=('LICENSE.txt',),
-    classifiers=[
-        'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-        'Operating System :: MacOS :: MacOS X',
-        'Operating System :: POSIX :: Linux',
-        'Operating System :: Microsoft :: Windows',
-        'Programming Language :: Python :: 3',
-        'Development Status :: 5 - Production/Stable',
-        'Topic :: Scientific/Engineering',
-    ],
+setup_args = dict(
+    ext_modules=[
+        Extension("dhn_med_py.med_file.dhnmed_file",
+                  ["dhn_med_py/med_file/dhnmed_file.c"],
+                  include_dirs=["dhn_medlib"],
+                  # extra_compile_args=['-w'])
+                  # extra_compile_args=['-O3'])
+                  extra_compile_args=['-fms-extensions', '-w']
+        )
+    ]
 )
+setup(**setup_args)

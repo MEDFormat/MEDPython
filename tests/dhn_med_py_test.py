@@ -38,9 +38,6 @@ class DhnMedPyTest(unittest.TestCase):
         self.level_2_password = 'L2_password'
         self.session_path = 'var_sf.medd'
 
-        self.session_path = '/home/jan_cimbalnik/Desktop/example.medd/'
-        self.level_2_password = 'bemena'
-
         self.session = MedSession(self.session_path, self.level_2_password)
 
 

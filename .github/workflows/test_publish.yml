@@ -30,12 +30,13 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install setuptools
+        pip install build
         pip install numpy
 
     - name: Test package
-      run:
-        python setup.py test
+      run: |
+        python -m build
+        python -m unittest tests/dhn_med_py_test.py
 
 #  release:
 #    if: contains(github.ref, 'refs/tags/')
