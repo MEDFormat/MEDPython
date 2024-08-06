@@ -1,1 +1,1 @@
-include dhn_med_py/med_file/dhnmed_file.h
+recursive-include *.h
