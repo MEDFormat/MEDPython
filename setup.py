@@ -29,13 +29,11 @@ import numpy
 
 FILE_EXT = Extension("dhn_med_py.med_file.dhnmed_file",
              ["dhn_med_py/med_file/dhnmed_file.c"],
-                     include_dirs=["dhn_medlib"],
-                     extra_compile_args=['-fms-extensions', '-w', '-O3'])
+                     include_dirs=["dhn_medlib", "dhn_med_py/med_file"],
+                     extra_compile_args=['-fms-extensions', '-w', '-O0'])
 
 setup(name="dhn_med_py",
-      install_requires=['numpy'],
       zip_safe=False,
       packages=["dhn_med_py", "dhn_med_py.med_file"],
       ext_modules=[FILE_EXT],
-      include_dirs=[numpy.get_include()],
-      test_suite='tests')
+      include_dirs=[numpy.get_include()])
