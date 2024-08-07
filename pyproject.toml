@@ -33,7 +33,7 @@ dynamic = ["version"]
 
 [tool.setuptools]
 include-package-data = true
-packages = ['dhn_med_py', 'dhn_med_py.med_file']
+package-dir = {"" = "src"}
 
 [tool.setuptools.dynamic]
 version = {attr = "dhn_med_py.version.__version__"}
