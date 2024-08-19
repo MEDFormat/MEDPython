@@ -27,9 +27,9 @@ import json
 from setuptools import Extension, setup
 import numpy
 
-from setuptools.command.install import install
+from setuptools.command.build import build
 
-class CustomInstallCommand(install):
+class ParseMedlibFlagsCmd(build):
     def run(self):
 
         with open('dhn_medlib/medlib_m12.h') as f:
@@ -61,7 +61,7 @@ class CustomInstallCommand(install):
 
         with open("src/dhn_med_py/medlib_flags.py", "w") as outfile:
             outfile.write(f'FLAGS = {json_string}')
-        install.run(self)
+        build.run(self)
 
 FILE_EXT = Extension("dhn_med_py.med_file.dhnmed_file",
              ["src/dhn_med_py/med_file/dhnmed_file.c"],
@@ -71,6 +71,6 @@ FILE_EXT = Extension("dhn_med_py.med_file.dhnmed_file",
 setup(name="dhn_med_py",
       zip_safe=False,
       package_dir={"": "src"},
-      cmdclass={'install': CustomInstallCommand},
+      cmdclass={'build': build},
       ext_modules=[FILE_EXT],
       include_dirs=[numpy.get_include()])
