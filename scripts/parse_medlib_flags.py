@@ -1,7 +1,7 @@
 
 import json
 
-with open('../dhn_medlib/medlib_m12.h') as f:
+with open('dhn_medlib/medlib_m12.h') as f:
     lines = f.readlines()
 
 flag_dict = {
@@ -28,6 +28,6 @@ for line in lines:
 
 json_string = json.dumps(flag_dict)
 
-with open("../src/dhn_med_py/medlib_flags.py", "w") as outfile:
+with open("src/dhn_med_py/medlib_flags.py", "w") as outfile:
     outfile.write(f'FLAGS = {json_string}')
 
