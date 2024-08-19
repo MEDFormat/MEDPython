@@ -38,10 +38,35 @@ class DhnMedPyTest(unittest.TestCase):
         self.level_2_password = 'L2_password'
         self.session_path = 'var_sf.medd'
 
-        self.session = MedSession(self.session_path, self.level_2_password)
+    # ----- MED flags test -----
+    def test_lh_flags(self):
 
+        ms = MedSession(self.session_path, self.level_2_password)
 
-    # ----- Read metadata tests -----
+        # Load LH flags
+        orig_lh_flags = ms._get_lh_flags()
+
+        # Change one LH flag
+        orig_lh_flags['session_level_lh_flags']['LH_UPDATE_EPHEMERAL_DATA_m12'] = False
+
+        # Set the modified orig flags
+        ms._set_lh_flags(orig_lh_flags)
+
+        # Load new LH flags
+        new_lh_flags = ms._get_lh_flags()
+
+        # Compare flags
+        assert new_lh_flags['session_level_lh_flags']['LH_UPDATE_EPHEMERAL_DATA_m12'] is False
+
+        # Set the flag back
+        orig_lh_flags['session_level_lh_flags']['LH_UPDATE_EPHEMERAL_DATA_m12'] = True
+        ms._set_lh_flags(orig_lh_flags)
+
+        ms.close()
+
+        return
+
+    # ----- Read metadata test -----
 
     def test_read_ts_segment_metadata(self):
         pass
@@ -58,7 +83,7 @@ class DhnMedPyTest(unittest.TestCase):
         pass
 
     def tearDown(self):
-        self.session.close()
+        pass
 
 if __name__ == '__main__':
     unittest.main()
