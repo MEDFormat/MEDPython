@@ -37,6 +37,9 @@ jobs:
         pip install wheel
         pip install numpy
 
+    - name: Parse medlib flags
+      run: python scripts/parse_medlib_flags.py
+
     - name: Build package
       run: python -m build
 
