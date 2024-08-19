@@ -1029,7 +1029,7 @@ typedef struct {
 #define LH_UPDATE_EPHEMERAL_DATA_m12			((ui8) 1 << 2)	// signal to higher level from lower level (reset by higher level after update)
 
 // session level
-#define LH_SESSION_OPEN_m12				((ui8) 1 << 8)
+#define LH_SESSION_OPEN_m12				((ui8) 1 << 7)
 #define LH_INCLUDE_TIME_SERIES_CHANNELS_m12		((ui8) 1 << 8)
 #define LH_INCLUDE_VIDEO_CHANNELS_m12			((ui8) 1 << 9)
 #define LH_MAP_ALL_TIME_SERIES_CHANNELS_m12		((ui8) 1 << 12)
