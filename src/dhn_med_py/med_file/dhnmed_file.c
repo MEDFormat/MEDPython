@@ -739,6 +739,7 @@ static PyObject     *read_MED_exec(SESSION_m12 *sess, si4 n_files, si8 start_tim
             seg_samps = cps->decompressed_data;
             py_array_out = (PyArrayObject *) PyArray_SimpleNew(1, dims, NPY_INT);
             numpy_arr_data = (si4 *) PyArray_GETPTR1(py_array_out, 0);
+            // TODO: do we have to copy? this increases memory usage when the data is big
             memcpy(numpy_arr_data, cps->decompressed_data, TIME_SLICE_SAMPLE_COUNT_S_m12(seg->time_slice) * sizeof(si4));
             
         } else {
@@ -2226,7 +2227,6 @@ PyObject            *get_raw_page(PyObject *self, PyObject *args)
     n_chans = sess->number_of_time_series_channels;
     
     // Create raw page output structure
-    // TODO: is this code necessary?
     if (channel_major == TRUE_m12) {
         dims[0] = n_chans;
         dims[1] = n_out_samps;
@@ -2461,6 +2461,284 @@ PyObject *sort_channels_by_acq_num(PyObject *self, PyObject *args)
     return Py_None;
     
 }
+
+PyObject *read_lh_flags(PyObject *self, PyObject *args)
+{
+    SESSION_m12             *sess;
+    CHANNEL_m12             *chan;
+    SEGMENT_m12             *seg;
+    TIME_SLICE_m12          *slice;
+    PyObject                *item;
+    PyObject                *pointers_obj;
+    PyObject                *py_session_dict;
+    PyObject                *py_channels_dict, *py_channel_dict;
+    PyObject                *py_segments_dict, *py_segment_dict;
+    si8                     i, j;
+    si4                     n_channels, n_segs;
+    ui8                     flags;
+
+
+    pointers_obj = NULL;
+
+    // --- Parse the input ---
+    if (!PyArg_ParseTuple(args,"O",
+                          &pointers_obj)){
+
+        PyErr_SetString(PyExc_RuntimeError, "input required: pointers\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    py_session_dict = Py_None;
+
+    // Get session struct from python object
+    item = PySequence_GetItem(pointers_obj, 2);
+    sess = (SESSION_m12*) PyLong_AsLongLong(item);
+
+    // Create session dict and set session level flags
+    flags = sess->header.flags;
+    py_session_dict = Py_BuildValue("{s:L}",
+                                    "session_flags", flags);
+
+    n_channels = sess->number_of_time_series_channels;
+
+    py_channels_dict = PyDict_New();
+    for (i=0; i<sess->number_of_time_series_channels; ++i) {
+        chan = sess->time_series_channels[i];
+        flags = chan->header.flags;
+        slice = &chan->time_slice;
+
+        if (slice->number_of_segments == UNKNOWN_m12) {
+            n_segs = G_get_segment_range_m12((LEVEL_HEADER_m12 *) chan, slice);
+        } else {
+            n_segs = slice->number_of_segments;
+        }
+
+        // Create channel dict and set channel level flags
+        py_channel_dict = Py_BuildValue("{s:L}",
+                                        "channel_flags", flags);
+
+        py_segments_dict = PyDict_New();
+        for (j=0; j<n_segs; ++j) {
+            seg = chan->segments[j];
+            flags = seg->header.flags;
+            // Create segment dict and set segment level flags
+            py_segment_dict = Py_BuildValue("{s:L}",
+                                            "segment_flags", flags);
+
+            // Set one segment to segments dict
+            PyDict_SetItemString(py_segments_dict, seg->name, py_segment_dict);
+        }
+
+        // Set segments to channel dict
+        PyDict_SetItemString(py_channel_dict, "segments", py_segments_dict);
+
+        // Set one channel to channels dict
+        PyDict_SetItemString(py_channels_dict, chan->name, py_channel_dict);
+    }
+
+    // Set channels to session dict
+    PyDict_SetItemString(py_session_dict, "channels", py_channels_dict);
+
+    // Clean up
+    Py_DECREF(item);
+
+    return py_session_dict;
+}
+
+
+PyObject *push_lh_flags(PyObject *self, PyObject *args)
+{
+    SESSION_m12             *sess;
+    CHANNEL_m12             *chan;
+    SEGMENT_m12             *seg;
+    TIME_SLICE_m12          *slice;
+    PyObject                *item;
+    PyObject                *pointers_obj;
+    PyObject                *value;
+    PyObject                *py_channels_dict, *py_channel_dict;
+    PyObject                *py_segments_dict, *py_segment_dict;
+    PyObject                *flags_dict;
+    si8                     i, j;
+    si4                     n_channels, n_segs;
+
+
+    pointers_obj = NULL;
+
+    // --- Parse the input ---
+    if (!PyArg_ParseTuple(args,"OO",
+                          &pointers_obj,
+                          &flags_dict)){
+
+        PyErr_SetString(PyExc_RuntimeError, "input required: pointers and flags dict\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    // Get session struct from python object
+    item = PySequence_GetItem(pointers_obj, 2);
+    sess = (SESSION_m12*) PyLong_AsLongLong(item);
+
+    // Set session level flags
+    value = PyDict_GetItemString(flags_dict, "session_flags");
+    if (value == NULL){
+        PyErr_SetString(PyExc_RuntimeError, "Key session_flags not found in flags dictionary\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    sess->header.flags = PyLong_AsLong(value);
+
+    n_channels = sess->number_of_time_series_channels;
+
+    // Check if channels are in session dictionary
+    py_channels_dict = PyDict_GetItemString(flags_dict, "channels");
+    if (py_channels_dict == NULL){
+        return Py_None;
+    }
+
+    for (i=0; i<sess->number_of_time_series_channels; ++i) {
+        chan = sess->time_series_channels[i];
+        slice = &chan->time_slice;
+
+        // Check if the channel is in the channels dictionary
+        py_channel_dict = PyDict_GetItemString(py_channels_dict, chan->name);
+        if (py_channel_dict == NULL){
+            continue;
+        }
+
+        // Set channel flags if they are present
+        value = PyDict_GetItemString(py_channel_dict, "channel_flags");
+        if (value == NULL){
+            continue;
+        }else{
+            chan->header.flags = PyLong_AsLong(value);
+        }
+
+        // Check if segments are in the channel dictionary
+        py_segments_dict = PyDict_GetItemString(py_channel_dict, "segments");
+        if (py_segments_dict == NULL){
+            continue;
+        }
+
+        if (slice->number_of_segments == UNKNOWN_m12) {
+            n_segs = G_get_segment_range_m12((LEVEL_HEADER_m12 *) chan, slice);
+        } else {
+            n_segs = slice->number_of_segments;
+        }
+
+        for (j=0; j<n_segs; ++j) {
+            seg = chan->segments[j];
+
+            // Check if the segment is in the segments dictionary
+            py_segment_dict = PyDict_GetItemString(py_segments_dict, seg->name);
+            if (py_segment_dict == NULL){
+                continue;
+            }
+
+            // Set segment flags if they are present
+            value = PyDict_GetItemString(py_channel_dict, "segment_flags");
+            if (value == NULL){
+                continue;
+            }else{
+                seg->header.flags = PyLong_AsLong(value);
+            }
+        }
+    }
+
+    // Clean up
+    Py_DECREF(item);
+
+    return Py_None;
+}
+
+//PyObject *read_dm_flags(PyObject *self, PyObject *args)
+//{
+//    SESSION_m12             *sess;
+//    CHANNEL_m12             *chan;
+//    SEGMENT_m12             *seg;
+//    TIME_SLICE_m12          *slice;
+//    PyObject                *seq;
+//    PyObject                *item;
+//    PyObject                *pointers_obj;
+//    PyObject                *py_session_dict;
+//    PyObject                *py_channels_dict, *py_channel_dict;
+//    PyObject                *py_segments_dict, *py_segment_dict;
+//    si8                     i, j;
+//    si4                     n_channels, n_segs;
+//    ui8                     flags;
+//
+//
+//    pointers_obj = NULL;
+//
+//    // --- Parse the input ---
+//    if (!PyArg_ParseTuple(args,"O",
+//                          &pointers_obj)){
+//
+//        PyErr_SetString(PyExc_RuntimeError, "input required: pointers\n");
+//        PyErr_Occurred();
+//        return NULL;
+//    }
+//
+//    py_session_dict = Py_None;
+//    py_channel_dict = Py_None;
+//    py_segment_dict = Py_None;
+//
+//    seq = PyObject_GetIter(pointers_obj);
+//    item=PyIter_Next(seq);
+//    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
+//    item=PyIter_Next(seq);
+//    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
+//    item=PyIter_Next(seq);
+//    sess = (SESSION_m12*) (PyLong_AsLongLong(item));
+//
+//    // Create session dict and set session level flags
+//    flags = sess->header.flags;
+//    py_session_dict = Py_BuildValue("{s:L}",
+//                                    "session_flags", flags);
+//
+//    n_channels = sess->number_of_time_series_channels;
+//
+//    py_channels_dict = PyDict_New();
+//    for (i=0; i<sess->number_of_time_series_channels; ++i) {
+//        chan = sess->time_series_channels[i];
+//        flags = chan->header.flags;
+//        slice = &chan->time_slice;
+//
+//        if (slice->number_of_segments == UNKNOWN_m12) {
+//            n_segs = G_get_segment_range_m12((LEVEL_HEADER_m12 *) chan, slice);
+//        } else {
+//            n_segs = slice->number_of_segments;
+//        }
+//
+//        // Create channel dict and set channel level flags
+//        py_channel_dict = Py_BuildValue("{s:L}",
+//                                        "channel_flags", flags);
+//
+//        py_segments_dict = PyDict_New();
+//        for (j=0; j<n_segs; ++j) {
+//            seg = chan->segments[j];
+//            flags = seg->header.flags;
+//            // Create segment dict and set segment level flags
+//            py_segment_dict = Py_BuildValue("{s:L}",
+//                                            "segment_flags", flags);
+//
+//            // Set one segment to segments dict
+//            PyDict_SetItemString(py_segments_dict, seg->name, py_segment_dict);
+//        }
+//
+//        // Set segments to channel dict
+//        PyDict_SetItemString(py_channel_dict, "segments", py_segments_dict);
+//
+//        // Set one channel to channels dict
+//        PyDict_SetItemString(py_channels_dict, chan->name, py_channel_dict);
+//    }
+//
+//    // Set channels to session dict
+//    PyDict_SetItemString(py_session_dict, "channels", py_channels_dict);
+//
+//    return py_session_dict;
+//}
 
 PyObject *set_single_channel_active(PyObject *self, PyObject *args)
 {

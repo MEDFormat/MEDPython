@@ -28,7 +28,12 @@ import numpy as np
 _session_open_counter = 0
 
 # Local imports
-from .med_file.dhnmed_file import (open_MED, read_MED, close_MED, read_session_info, get_raw_page, sort_channels_by_acq_num, set_single_channel_active, set_channel_reference, get_globals_number_of_session_samples, find_discontinuities, get_session_records)
+from .medlib_flags import FLAGS
+from .med_file.dhnmed_file import (open_MED, read_MED, close_MED,
+                                   read_session_info, get_raw_page,
+                                   sort_channels_by_acq_num, set_single_channel_active, set_channel_reference,
+                                   get_globals_number_of_session_samples, find_discontinuities, get_session_records,
+                                   read_lh_flags, push_lh_flags)
 
 class MedSession():
     """
@@ -144,8 +149,103 @@ class MedSession():
         self.__return_trace_ranges = False
         
         return
-        
 
+    # ----- Private functions -----
+    def _get_lh_flags(self):
+
+        lh_flags = read_lh_flags(self.__metadata)
+        lh_flag_state = {}
+
+        # Session level
+        lh_flag_binary = format(lh_flags['session_flags'], '064b')[::-1]
+        lh_session_flag_state = {}
+
+        for f, pos in FLAGS['LH'].items():
+            if lh_flag_binary[pos] == '1':
+                lh_session_flag_state[f] = True
+            else:
+                lh_session_flag_state[f] = False
+
+        lh_flag_state['session_level_lh_flags'] = lh_session_flag_state
+
+        # Channel level
+        lh_channels_flag_state = {}
+        for channel, channel_dict in lh_flags['channels'].items():
+            lh_channel_flag_state = {}
+            lh_flag_binary = format(channel_dict['channel_flags'], '064b')[::-1]
+            for f, pos in FLAGS['LH'].items():
+                if lh_flag_binary[pos] == '1':
+                    lh_channel_flag_state[f] = True
+                else:
+                    lh_channel_flag_state[f] = False
+            lh_channels_flag_state[channel] = {'channel_level_lh_flags':
+                                                lh_channel_flag_state}
+
+            # Segment level
+            lh_segments_flag_state = {}
+            for segment, segment_dict in channel_dict['segments'].items():
+                lh_segment_flag_state = {}
+                lh_flag_binary = format(segment_dict['segment_flags'], '064b')[::-1]
+                for f, pos in FLAGS['LH'].items():
+                    if lh_flag_binary[pos] == '1':
+                        lh_segment_flag_state[f] = True
+                    else:
+                        lh_segment_flag_state[f] = False
+                lh_segments_flag_state[segment] = {'segment_level_lh_flags':
+                                                    lh_segment_flag_state}
+
+            lh_channels_flag_state[channel]['segments'] = lh_segments_flag_state
+
+        lh_flag_state['channels'] = lh_channels_flag_state
+
+        return lh_flag_state
+
+    def _set_lh_flags(self, lh_flags_python):
+        """
+        Set session/channel/segment LH level flags.
+        Args:
+            lh_flags_python:
+
+        Returns:
+
+        """
+
+        lh_flags = {}
+
+        # Session level flags
+        flag_str_list = list(format(0, '064b'))
+        for flag, val in lh_flags_python['session_level_lh_flags'].items():
+            flag_str_list[FLAGS['LH'][flag]] = str(int(val))
+        flag_str = ''.join(flag_str_list)[::-1]
+        flag_int = int(flag_str, 2)
+        lh_flags['session_flags'] = flag_int
+
+        lh_flags['channels'] = {}
+        for channel, channel_dict in lh_flags_python['channels'].items():
+            # Channel level flags
+            flag_str_list = list(format(0, '064b'))
+            for flag, val in channel_dict['channel_level_lh_flags'].items():
+                flag_str_list[FLAGS['LH'][flag]] = str(int(val))
+            flag_str = ''.join(flag_str_list)[::-1]
+            flag_int = int(flag_str, 2)
+            lh_flags['channels'][channel] = {'channel_flags': flag_int}
+
+            lh_flags['channels'][channel]['segments'] = {}
+            for segment, segment_dict in channel_dict['segments'].items():
+                # Segment level flags
+                flag_str_list = list(format(0, '064b'))
+                for flag, val in segment_dict['segment_level_lh_flags'].items():
+                    flag_str_list[FLAGS['LH'][flag]] = str(int(val))
+                flag_str = ''.join(flag_str_list)[::-1]
+                flag_int = int(flag_str, 2)
+                lh_flags['channels'][channel]['segments'][segment] = {'segment_flags': flag_int}
+
+        push_lh_flags(self.__metadata, lh_flags)
+
+        return None
+
+
+    # ----- Public functions -----
     def read_by_time(self, start_time, end_time):
         """
         Read all active channels of a MED session, by specifying start and end times.
@@ -187,10 +287,6 @@ class MedSession():
         self.data = read_MED(self.__metadata, int(start_time), int(end_time))
         
         return self.data
-        
-    # This will go away - just keep it for now for legacy users
-    def readByIndex(self, start_idx, end_idx):
-        return self.read_by_index(start_idx, end_idx)
         
     def read_by_index(self, start_idx, end_idx):
         """
