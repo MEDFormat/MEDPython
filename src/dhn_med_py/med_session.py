@@ -23,12 +23,6 @@ from os import major
 # Written by Matt Stead and Dan Crepeau
 # Copyright Dark Horse Neuro Inc, 2023
 
-# Third party imports
-import numpy as np
-
-# TODO: what is this for? Get rid of this
-_session_open_counter = 0
-
 # Local imports
 from .medlib_flags import FLAGS
 from .med_file.dhnmed_file import (open_MED, read_MED, close_MED,
@@ -499,9 +493,7 @@ class MedSession:
 
 
     def __init__(self, session_path, password=None, reference_channel=None):
-    
-        global _session_open_counter
-        
+
         # Set default for class destructor
         self.__close_on_destruct = True
       
@@ -518,28 +510,22 @@ class MedSession:
             self.__metadata = open_MED(session_path, password)
         except:
             MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
-            
-        _session_open_counter += 1
-        
+
         # this should never happen, but check for it anyway
         try:
             if self.__metadata is None:
-                _session_open_counter -= 1
                 raise MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
         except:
-            _session_open_counter -= 1
             raise MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
         
         # check for incorrect password entered
         if self.__metadata[3] == 5:
             level_1_hint = self.__metadata[4]
             level_2_hint = self.__metadata[5]
-            _session_open_counter -= 1
             raise MedSession.BadPasswordException("Password is invalid: Unable to open session: " + str(session_path) + ". Level 1 password hint: " + str(level_1_hint) + ", Level 2 password hint: " + str(level_2_hint))
         
         # otherwise, just throw an error message
         if self.__metadata[2] == 0:
-            _session_open_counter -= 1
             raise MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
             
         if reference_channel is not None:
@@ -740,17 +726,14 @@ class MedSession:
         
     def close(self):
 
-        # TODO get rid of global
         # TODO remember to close free Datamatrix!!!
-        global _session_open_counter
-    
+
         # If there is no metadata, then there is no MED session, so there is nothing to do.
         if self.__metadata is None:
             return
             
         close_MED(self.__metadata)
         self.__metadata = None
-        _session_open_counter -= 1
         return
         
     # def get_matrix_by_time(self, start_time='start', end_time='end', sampling_frequency=None, sample_count=None):
