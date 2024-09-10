@@ -73,7 +73,7 @@ static PyObject *read_session_info(PyObject *self, PyObject *args);
 static PyObject *sort_channels_by_acq_num(PyObject *self, PyObject *args);
 static PyObject *read_lh_flags(PyObject *self, PyObject *args);
 static PyObject *push_lh_flags(PyObject *self, PyObject *args);
-static PyObject *set_single_channel_active(PyObject *self, PyObject *args);
+//static PyObject *set_single_channel_active(PyObject *self, PyObject *args);
 static PyObject *set_channel_reference(PyObject *self, PyObject *args);
 static PyObject *get_globals_number_of_session_samples(PyObject *self, PyObject *args);
 static PyObject *find_discontinuities(PyObject *self, PyObject *args);
@@ -95,7 +95,7 @@ static PyMethodDef module_methods[] = {
     {"sort_channels_by_acq_num", sort_channels_by_acq_num, METH_VARARGS, read_MED_docstring},
     {"read_lh_flags", read_lh_flags, METH_VARARGS, read_MED_docstring},
     {"push_lh_flags", push_lh_flags, METH_VARARGS, read_MED_docstring},
-    {"set_single_channel_active", set_single_channel_active, METH_VARARGS, read_MED_docstring},
+//    {"set_single_channel_active", set_single_channel_active, METH_VARARGS, read_MED_docstring},
     {"set_channel_reference", set_channel_reference, METH_VARARGS, read_MED_docstring},
     {"get_globals_number_of_session_samples", get_globals_number_of_session_samples, METH_VARARGS, read_MED_docstring},
     {"find_discontinuities", find_discontinuities, METH_VARARGS, read_MED_docstring},

@@ -27,7 +27,7 @@ from os import major
 from .medlib_flags import FLAGS
 from .med_file.dhnmed_file import (open_MED, read_MED, close_MED,
                                    read_session_info,
-                                   sort_channels_by_acq_num, set_single_channel_active, set_channel_reference,
+                                   sort_channels_by_acq_num, set_channel_reference,
                                    get_globals_number_of_session_samples, find_discontinuities, get_session_records,
                                    read_lh_flags, push_lh_flags,
                                    initialize_data_matrix, read_dm_flags, push_dm_flags, get_dm)
@@ -875,15 +875,15 @@ class MedSession:
         return
         
 
-    def __set_single_channel_active(self, chan_name, is_active):
-    
-        set_single_channel_active(self.__metadata, chan_name, is_active)
-        
-        return
+    # def __set_single_channel_active(self, chan_name, is_active):
+    #
+    #     set_single_channel_active(self.__metadata, chan_name, is_active)
+    #
+    #     return
         
 
-    # TODO: redo this using flags
-    # TODO: create function that frees inactive channels???
+    # TODO: create function that frees inactive channels if cahing is on???
+    # TODO: deal with inactive reference channel problem
     def set_channel_active(self, chan_name, is_active=True):
         """
         Sets the specified channel (or list of channels) to be active (default) or inactive.
@@ -912,8 +912,6 @@ class MedSession:
         ---------
         chan_name: str, or list of str
             name of channel to activate or inactivate, or a list of channels.
-            If only a single channel is specified, the keyword "all" can be used to mean all
-            channels.
         is_active : bool
             defaults to True (setting channel to be active).
         
@@ -921,76 +919,27 @@ class MedSession:
         -------
         None
         """
+        lh_flags = self._get_lh_flags()
         if type(chan_name) is list:
             for chan in chan_name:
                 if type(chan) is not str:
                     raise MedSession.InvalidArgumentException("List argument must be a list of strings.")
-                if chan == "all":
-                    raise MedSession.InvalidArgumentException("List argument cannot contain the string 'all'.")
-                #if chan == "none":
-                #    raise MedSession.InvalidArgumentException("List argument cannot contain the string 'none'.")
             for chan in chan_name:
-                self.__set_single_channel_active(chan, is_active)
+                if chan not in lh_flags['channels'].keys():
+                    raise MedSession.InvalidArgumentException("Channel name not found in session.")
+                lh_flags['channels'][chan]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] = is_active
         elif type(chan_name) is str:
-            self.__set_single_channel_active(chan_name, is_active)
+            if chan_name not in lh_flags['channels'].keys():
+                raise MedSession.InvalidArgumentException("Channel name not found in session.")
+            lh_flags['channels'][chan_name]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] = is_active
         else:
             raise MedSession.InvalidArgumentException("Argument must be either a list or a string.")
-        
+
+        self._set_lh_flags(lh_flags)
+
         self.session_info = read_session_info(self.__metadata)
         
         return
-        
-    def set_channel_inactive(self, chan_name):
-        """
-        Sets the specified channel (or list of channels) to be inactive
-   
-        An active channel is a channel that is used in read operations.  If a session has a lot
-        of channels, then it might be useful to make a subset inactive, so we can just read
-        from the remaining subset of channels.
-        
-        The function set_channel_active is identical to this function if the boolean value is
-        false.  For example, the following two function calls do the same thing:
-            sess.set_channel_active("channel_001", False)
-            sess.set_channel_inactive("channel_001")
-        set_channel_inactive is provided as a convenience.
-        
-        The keyword "all" can be used to specify all channels.  "all" cannot be a string in a
-        list of channels.
-        
-        A warning is generated if a channel is deactivated that is the reference channel.  In
-        this case the reference channel is not modified - but will be if a read call is made
-        using index values.  So the burden is on the user to specify what a new reference channel
-        should be.
-        
-        Channel names are case-sensitive.
-        
-        Parameters
-        ---------
-        chan_name: str, or list of str
-            name of channel to inactivate, or a list of channels.
-            If only a single channel is specified, the keyword "all" can be used to mean all
-            channels.
-        
-        Returns
-        -------
-        None
-        """
-    
-        if type(chan_name) is list:
-            for chan in chan_name:
-                if type(chan) is not str:
-                    raise MedSession.InvalidArgumentException("List argument must be a list of strings.")
-                if chan == "all":
-                    raise MedSession.InvalidArgumentException("List argument cannot contain the string 'all'.")
-                #if chan == "none":
-                #    raise MedSession.InvalidArgumentException("List argument cannot contain the string 'none'.")
-        elif type(chan_name) is not str:
-            raise MedSession.InvalidArgumentException("Argument must be either a list or a string.")
-
-        self.set_channel_active(chan_name, False)
-        
-        return
-        
         
     # def set_filter(self, filter_type):
     #     """

@@ -742,7 +742,8 @@ static PyObject     *read_MED_exec(SESSION_m12 *sess, si4 n_files, si8 start_tim
             seg_samps = cps->decompressed_data;
             py_array_out = (PyArrayObject *) PyArray_SimpleNew(1, dims, NPY_INT);
             numpy_arr_data = (si4 *) PyArray_GETPTR1(py_array_out, 0);
-            // TODO: do we have to copy? this increases memory usage when the data is big maybe just transfer ownership like in DM
+            // TODO: do we have to copy? this increases memory usage when the data is big maybe just transfer ownership like in DM or even better - decompress directly to numpy array
+
             memcpy(numpy_arr_data, cps->decompressed_data, TIME_SLICE_SAMPLE_COUNT_S_m12(seg->time_slice) * sizeof(si4));
             
         } else {
@@ -2799,7 +2800,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
 //    Py_DECREF(py_records);
 //    Py_DECREF(py_contigua);
 //    Py_DECREF(py_array_out);
-//    if (trace_ranges) {
+//    if (trace_ranges) {set_single_channel_active
 //        Py_DECREF(mins);
 //        Py_DECREF(maxs);
 //    }
@@ -3159,113 +3160,113 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
     return Py_None;
 }
 
-PyObject *set_single_channel_active(PyObject *self, PyObject *args)
-{
-    SESSION_m12             *sess;
-    TERN_m12                all, none;
-    TERN_m12                is_active;
-    PyObject                *pointers_obj, *chan_name_obj, *is_active_obj;
-    PyObject                *temp_UTF_str;
-    si1                     *temp_str_bytes;
-    PyObject                *seq;
-    PyObject                *item;
-    si1                     chan_name[BASE_FILE_NAME_BYTES_m12];
-    si8                     i, n_active_chans;
-    CHANNEL_m12             *chan;
-    si1                     reference_chan_temp[BASE_FILE_NAME_BYTES_m12];
-
-
-
-    pointers_obj = NULL;
-    chan_name_obj = NULL;
-    is_active_obj = NULL;
-
-    // --- Parse the input ---
-    if (!PyArg_ParseTuple(args,"OOO",
-                          &pointers_obj,
-                          &chan_name_obj,
-                          &is_active_obj)){
-
-        PyErr_SetString(PyExc_RuntimeError, "3 inputs required: pointers, chan_name, is_active\n");
-        PyErr_Occurred();
-        return NULL;
-    }
-
-    all = FALSE_m12;
-    none = FALSE_m12;
-
-    if (chan_name_obj != NULL)
-    {
-        if (PyUnicode_Check(chan_name_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(chan_name_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "chan_name (input 2) can be specified as a string\n");
-                PyErr_Occurred();
-                return NULL;
-            }
-            else {
-                if (strcmp(temp_str_bytes, "none") == 0) {
-                    none = FALSE_m12;
-                } else if (strcmp(temp_str_bytes, "all") == 0) {
-                    all = TRUE_m12;
-                } else {
-                    sprintf(chan_name, "%s", temp_str_bytes);
-                }
-            }
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "chan_name (input 2) can be specified as a string\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-
-    if (is_active_obj != NULL)
-    {
-        if (PyBool_Check(is_active_obj)) {
-            if (is_active_obj == Py_True)
-                is_active = TRUE_m12;
-            else
-                is_active = FALSE_m12;
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "is_active (input 3) can be specified as a boolean\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-
-
-    seq = PyObject_GetIter(pointers_obj);
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    sess = (SESSION_m12*) (PyLong_AsLongLong(item));
-    //sess = change_pointer(sess, globals_m12);
-
-    strcpy(reference_chan_temp, globals_m12->reference_channel_name);
-
-    for (i = n_active_chans = 0; i < sess->number_of_time_series_channels; ++i) {
-        chan = sess->time_series_channels[i];
-
-        if ((strcmp(chan_name, chan->name) == 0) || (all == TRUE_m12)) {
-            if (is_active == TRUE_m12) {
-                chan->flags |= LH_CHANNEL_ACTIVE_m12;
-                //printf("Turning chan %s on\n", chan->name);
-            } else {
-                chan->flags &= ~LH_CHANNEL_ACTIVE_m12;
-                //printf("Turning chan %s off\n", chan->name);
-                //if (!strcmp(chan->name, reference_chan_temp))
-                //    printf("Warning: %s is the reference channel, and is now inactive. Please set a new reference channel, if reading by index values.\n", chan->name);
-            }
-        }
-    }
-    
-    Py_INCREF(Py_None);
-    return Py_None;
-}
+//PyObject *set_single_channel_active(PyObject *self, PyObject *args)
+//{
+//    SESSION_m12             *sess;
+//    TERN_m12                all, none;
+//    TERN_m12                is_active;
+//    PyObject                *pointers_obj, *chan_name_obj, *is_active_obj;
+//    PyObject                *temp_UTF_str;
+//    si1                     *temp_str_bytes;
+//    PyObject                *seq;
+//    PyObject                *item;
+//    si1                     chan_name[BASE_FILE_NAME_BYTES_m12];
+//    si8                     i, n_active_chans;
+//    CHANNEL_m12             *chan;
+//    si1                     reference_chan_temp[BASE_FILE_NAME_BYTES_m12];
+//
+//
+//
+//    pointers_obj = NULL;
+//    chan_name_obj = NULL;
+//    is_active_obj = NULL;
+//
+//    // --- Parse the input ---
+//    if (!PyArg_ParseTuple(args,"OOO",
+//                          &pointers_obj,
+//                          &chan_name_obj,
+//                          &is_active_obj)){
+//
+//        PyErr_SetString(PyExc_RuntimeError, "3 inputs required: pointers, chan_name, is_active\n");
+//        PyErr_Occurred();
+//        return NULL;
+//    }
+//
+//    all = FALSE_m12;
+//    none = FALSE_m12;
+//
+//    if (chan_name_obj != NULL)
+//    {
+//        if (PyUnicode_Check(chan_name_obj)) {
+//            temp_UTF_str = PyUnicode_AsEncodedString(chan_name_obj, "utf-8","strict"); // Encode to UTF-8 python objects
+//            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
+//
+//            if (!*temp_str_bytes) {
+//                PyErr_SetString(PyExc_RuntimeError, "chan_name (input 2) can be specified as a string\n");
+//                PyErr_Occurred();
+//                return NULL;
+//            }
+//            else {
+//                if (strcmp(temp_str_bytes, "none") == 0) {
+//                    none = FALSE_m12;
+//                } else if (strcmp(temp_str_bytes, "all") == 0) {
+//                    all = TRUE_m12;
+//                } else {
+//                    sprintf(chan_name, "%s", temp_str_bytes);
+//                }
+//            }
+//        } else {
+//            PyErr_SetString(PyExc_RuntimeError, "chan_name (input 2) can be specified as a string\n");
+//            PyErr_Occurred();
+//            return NULL;
+//        }
+//    }
+//
+//    if (is_active_obj != NULL)
+//    {
+//        if (PyBool_Check(is_active_obj)) {
+//            if (is_active_obj == Py_True)
+//                is_active = TRUE_m12;
+//            else
+//                is_active = FALSE_m12;
+//        } else {
+//            PyErr_SetString(PyExc_RuntimeError, "is_active (input 3) can be specified as a boolean\n");
+//            PyErr_Occurred();
+//            return NULL;
+//        }
+//    }
+//
+//
+//    seq = PyObject_GetIter(pointers_obj);
+//    item=PyIter_Next(seq);
+//    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
+//    item=PyIter_Next(seq);
+//    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
+//    item=PyIter_Next(seq);
+//    sess = (SESSION_m12*) (PyLong_AsLongLong(item));
+//    //sess = change_pointer(sess, globals_m12);
+//
+//    strcpy(reference_chan_temp, globals_m12->reference_channel_name);
+//
+//    for (i = n_active_chans = 0; i < sess->number_of_time_series_channels; ++i) {
+//        chan = sess->time_series_channels[i];
+//
+//        if ((strcmp(chan_name, chan->name) == 0) || (all == TRUE_m12)) {
+//            if (is_active == TRUE_m12) {
+//                chan->flags |= LH_CHANNEL_ACTIVE_m12;
+//                //printf("Turning chan %s on\n", chan->name);
+//            } else {
+//                chan->flags &= ~LH_CHANNEL_ACTIVE_m12;
+//                //printf("Turning chan %s off\n", chan->name);
+//                //if (!strcmp(chan->name, reference_chan_temp))
+//                //    printf("Warning: %s is the reference channel, and is now inactive. Please set a new reference channel, if reading by index values.\n", chan->name);
+//            }
+//        }
+//    }
+//
+//    Py_INCREF(Py_None);
+//    return Py_None;
+//}
 
 PyObject *set_channel_reference(PyObject *self, PyObject *args)
 {
