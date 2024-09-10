@@ -69,7 +69,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args);
 static PyObject *open_MED(PyObject *self, PyObject *args);
 static PyObject *close_MED(PyObject *self, PyObject *args);
 static PyObject *read_session_info(PyObject *self, PyObject *args);
-static PyObject *get_raw_page(PyObject *self, PyObject *args);
+//static PyObject *get_raw_page(PyObject *self, PyObject *args);
 static PyObject *sort_channels_by_acq_num(PyObject *self, PyObject *args);
 static PyObject *read_lh_flags(PyObject *self, PyObject *args);
 static PyObject *push_lh_flags(PyObject *self, PyObject *args);
@@ -78,6 +78,10 @@ static PyObject *set_channel_reference(PyObject *self, PyObject *args);
 static PyObject *get_globals_number_of_session_samples(PyObject *self, PyObject *args);
 static PyObject *find_discontinuities(PyObject *self, PyObject *args);
 static PyObject *get_session_records(PyObject *self, PyObject *args);
+static PyObject *initialize_data_matrix(PyObject *self, PyObject *args);
+static PyObject *read_dm_flags(PyObject *self, PyObject *args);
+static PyObject *push_dm_flags(PyObject *self, PyObject *args);
+static PyObject *get_dm(PyObject *self, PyObject *args);
 
 
 /* Specification of the members of the module */
@@ -87,7 +91,7 @@ static PyMethodDef module_methods[] = {
     {"open_MED", open_MED, METH_VARARGS, read_MED_docstring},
     {"close_MED", close_MED, METH_VARARGS, read_MED_docstring},
     {"read_session_info", read_session_info, METH_VARARGS, read_MED_docstring},
-    {"get_raw_page", get_raw_page, METH_VARARGS, read_MED_docstring},
+//    {"get_raw_page", get_raw_page, METH_VARARGS, read_MED_docstring},
     {"sort_channels_by_acq_num", sort_channels_by_acq_num, METH_VARARGS, read_MED_docstring},
     {"read_lh_flags", read_lh_flags, METH_VARARGS, read_MED_docstring},
     {"push_lh_flags", push_lh_flags, METH_VARARGS, read_MED_docstring},
@@ -96,6 +100,10 @@ static PyMethodDef module_methods[] = {
     {"get_globals_number_of_session_samples", get_globals_number_of_session_samples, METH_VARARGS, read_MED_docstring},
     {"find_discontinuities", find_discontinuities, METH_VARARGS, read_MED_docstring},
     {"get_session_records", get_session_records, METH_VARARGS, read_MED_docstring},
+    {"initialize_data_matrix", initialize_data_matrix, METH_VARARGS, read_MED_docstring},
+    {"read_dm_flags", read_dm_flags, METH_VARARGS, read_MED_docstring},
+    {"push_dm_flags", push_dm_flags, METH_VARARGS, read_MED_docstring},
+    {"get_dm", get_dm, METH_VARARGS, read_MED_docstring},
     {NULL, NULL, 0, NULL}
 };
 

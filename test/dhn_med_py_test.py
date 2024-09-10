@@ -66,6 +66,52 @@ class DhnMedPyTest(unittest.TestCase):
 
         return
 
+    def test_dm_flags(self):
+        ms = MedSession(self.session_path, self.level_2_password)
+
+        dm = ms.data_matrix
+
+        # Load LH flags
+        orig_dm_flags = dm._get_dm_flags()
+
+        # Change one LH flag
+        orig_dm_flags['DM_TYPE_SI2_m12'] = True
+
+        # Set the modified orig flags
+        dm._set_dm_flags(orig_dm_flags)
+
+        # Load new LH flags
+        new_dm_flags = dm._get_dm_flags()
+
+        # Compare flags
+        assert new_dm_flags['DM_TYPE_SI2_m12'] is True
+
+        # Set the flag back
+        orig_dm_flags['DM_TYPE_SI2_m12'] = False
+        dm._set_dm_flags(orig_dm_flags)
+
+        # Test filter_type
+        orig_filter_type = dm.filter_type
+        dm.filter_type = 'none'
+        assert dm.filter_type != orig_filter_type
+
+        # Test detrend
+        orig_detrend = dm.detrend
+        dm.detrend = not orig_detrend
+        assert dm.detrend is not orig_detrend
+
+        # Test trace_ranges
+        orig_trace_ranges = dm.trace_ranges
+        dm.trace_ranges = not orig_trace_ranges
+        assert dm.trace_ranges is not orig_trace_ranges
+
+        # Test major_dimension
+        orig_major_dimension = dm.major_dimension
+        dm.major_dimension = 'sample'
+        assert dm.major_dimension != orig_major_dimension
+
+        ms.close()
+
     # ----- Read metadata test -----
 
     def test_read_ts_segment_metadata(self):
