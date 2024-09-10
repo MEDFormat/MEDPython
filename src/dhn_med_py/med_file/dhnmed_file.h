@@ -78,6 +78,7 @@ static PyObject *set_channel_reference(PyObject *self, PyObject *args);
 static PyObject *get_globals_number_of_session_samples(PyObject *self, PyObject *args);
 static PyObject *find_discontinuities(PyObject *self, PyObject *args);
 static PyObject *get_session_records(PyObject *self, PyObject *args);
+void dm_capsule_destructor(PyObject *capsule);
 static PyObject *initialize_data_matrix(PyObject *self, PyObject *args);
 static PyObject *read_dm_flags(PyObject *self, PyObject *args);
 static PyObject *push_dm_flags(PyObject *self, PyObject *args);

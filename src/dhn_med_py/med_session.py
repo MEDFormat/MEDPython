@@ -726,8 +726,6 @@ class MedSession:
         
     def close(self):
 
-        # TODO remember to close free Datamatrix!!!
-
         # If there is no metadata, then there is no MED session, so there is nothing to do.
         if self.__metadata is None:
             return

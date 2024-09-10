@@ -1836,16 +1836,21 @@ si4     rec_compare(const void *a, const void *b)
     return(-1);
 }
 
+void dm_capsule_destructor(PyObject *capsule) {
+    void *dm = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
+    if (dm) {
+        DM_free_matrix_m12(dm, TRUE_m12);
+//        printf("Data matrix freed: %s\n", PyCapsule_GetName(capsule));
+    }
+}
+
 PyObject            *initialize_data_matrix(PyObject *self, PyObject *args)
 {
-    PyObject                *py_pointers;
     DATA_MATRIX_m12         *dm;
 
     dm = (DATA_MATRIX_m12 *) calloc_m12((size_t) 1, sizeof(DATA_MATRIX_m12), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
-    py_pointers = PyTuple_New(1);
-    PyTuple_SetItem(py_pointers, 0, PyLong_FromLongLong(dm));
+    return PyCapsule_New((void *) dm, "dm", dm_capsule_destructor);
 
-    return py_pointers;
 }
 
 PyObject            *get_dm(PyObject *self, PyObject *args)
@@ -1853,7 +1858,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
 
     SESSION_m12             *sess;
     PyObject                *item;
-    PyObject                *pointers_obj, *dm_pointers_obj;
+    PyObject                *pointers_obj, *dm_capsule_obj;
     PyObject                *start_time_input_obj, *end_time_input_obj, *n_out_samps_obj;
     PyObject                *start_index_input_obj, *end_index_input_obj, *major_dimension_obj;
     PyObject                *sampling_frequency_obj;
@@ -1904,7 +1909,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"OO|OOOOOOO",
                           &pointers_obj,
-                          &dm_pointers_obj,
+                          &dm_capsule_obj,
                           &start_index_input_obj,
                           &end_index_input_obj,
                           &start_time_input_obj,
@@ -1922,8 +1927,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     item = PySequence_GetItem(pointers_obj, 2);
     sess = (SESSION_m12*) PyLong_AsLongLong(item);
 
-    item = PySequence_GetItem(dm_pointers_obj, 0);
-    dm = (DATA_MATRIX_m12*) PyLong_AsLongLong(item);
+    dm = (DATA_MATRIX_m12*) PyCapsule_GetPointer(dm_capsule_obj, "dm");
 
     // set defaults, in case args are NULL/None
     start_time = UUTC_NO_ENTRY_m12;
@@ -3086,17 +3090,14 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
 PyObject *read_dm_flags(PyObject *self, PyObject *args)
 {
     DATA_MATRIX_m12         *dm;
-    PyObject                *item;
-    PyObject                *dm_pointers_obj;
+    PyObject                *dm_capsule_obj;
     PyObject                *py_dm_dict;
     ui8                     flags;
 
 
-    dm_pointers_obj = NULL;
-
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"O",
-                          &dm_pointers_obj)){
+                          &dm_capsule_obj)){
 
         PyErr_SetString(PyExc_RuntimeError, "input required: pointers\n");
         PyErr_Occurred();
@@ -3105,16 +3106,13 @@ PyObject *read_dm_flags(PyObject *self, PyObject *args)
 
     py_dm_dict = Py_None;
 
-    // Get session struct from python object
-    item = PySequence_GetItem(dm_pointers_obj, 0);
-    dm = (DATA_MATRIX_m12 *) PyLong_AsLongLong(item);
+    // Get data_matrix struct from python object
+    dm = (DATA_MATRIX_m12 *) PyCapsule_GetPointer(dm_capsule_obj, "dm");
 
     // Create session dict and set session level flags
     flags = dm->flags;
     py_dm_dict = Py_BuildValue("{s:L}",
                                "data_matrix_flags", flags);
-
-    Py_DECREF(item);
 
     return py_dm_dict;
 }
@@ -3122,17 +3120,13 @@ PyObject *read_dm_flags(PyObject *self, PyObject *args)
 PyObject *push_dm_flags(PyObject *self, PyObject *args)
 {
     DATA_MATRIX_m12         *dm;
-    PyObject                *item;
-    PyObject                *pointers_obj;
+    PyObject                *dm_capsule_obj;
     PyObject                *value;
     PyObject                *flags_dict;
 
-
-    pointers_obj = NULL;
-
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"OO",
-                          &pointers_obj,
+                          &dm_capsule_obj,
                           &flags_dict)){
 
         PyErr_SetString(PyExc_RuntimeError, "input required: pointers and flags dict\n");
@@ -3140,9 +3134,8 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    // Get session struct from python object
-    item = PySequence_GetItem(pointers_obj, 0);
-    dm = (DATA_MATRIX_m12*) PyLong_AsLongLong(item);
+    // Get data_matrix struct from python object
+    dm = (DATA_MATRIX_m12 *) PyCapsule_GetPointer(dm_capsule_obj, "dm");
 
     // Set session level flags
     value = PyDict_GetItemString(flags_dict, "data_matrix_flags");
@@ -3153,9 +3146,6 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
     }
 
     dm->flags = PyLong_AsLong(value);
-
-    // Clean up
-    Py_DECREF(item);
 
     return Py_None;
 }
