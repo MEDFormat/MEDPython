@@ -65,9 +65,9 @@ static char read_MED_docstring[] =
 
 
 static PyObject *test_api(PyObject *self, PyObject *args);
+void session_capsule_destructor(PyObject *capsule);
 static PyObject *read_MED(PyObject *self, PyObject *args);
 static PyObject *open_MED(PyObject *self, PyObject *args);
-static PyObject *close_MED(PyObject *self, PyObject *args);
 static PyObject *read_session_info(PyObject *self, PyObject *args);
 //static PyObject *get_raw_page(PyObject *self, PyObject *args);
 static PyObject *sort_channels_by_acq_num(PyObject *self, PyObject *args);
@@ -90,7 +90,6 @@ static PyMethodDef module_methods[] = {
     {"test_api", test_api, METH_VARARGS, test_api_docstring},
     {"read_MED", read_MED, METH_VARARGS, read_MED_docstring},
     {"open_MED", open_MED, METH_VARARGS, read_MED_docstring},
-    {"close_MED", close_MED, METH_VARARGS, read_MED_docstring},
     {"read_session_info", read_session_info, METH_VARARGS, read_MED_docstring},
 //    {"get_raw_page", get_raw_page, METH_VARARGS, read_MED_docstring},
     {"sort_channels_by_acq_num", sort_channels_by_acq_num, METH_VARARGS, read_MED_docstring},

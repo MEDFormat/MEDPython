@@ -83,7 +83,6 @@ si8 *change_pointer(SESSION_m12 *sess, GLOBALS_m12 *globals_m12)
 static PyObject *open_MED(PyObject *self, PyObject *args)
 {
     SESSION_m12                             *sess;
-    PyObject                                *py_pointers;
     si1                     *file_list, **file_list_p;
     si1                     *temp_str_bytes;
     PyObject                *temp_UTF_str;
@@ -98,7 +97,9 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     TERN_m12     license_ok;
     TIME_SLICE_m12    slice;
     int                     err_code;
+    si1                     *err_str;
     si8                     *py_pointer_changed;
+    PyObject                *sess_capsule_object;
     
     password_input_obj = NULL;
     
@@ -190,10 +191,44 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
 
     sess = G_open_session_m12(NULL, &slice, file_list, n_files, flags, password);
 
-
-
     err_code = globals_m12->err_code;
-    
+    if (err_code != 0) {
+        switch (globals_m12->err_code) {
+		case E_NO_ERR_m12:
+			err_str = E_NO_ERR_STR_m12;
+			break;
+		case E_NO_FILE_m12:
+			err_str = E_NO_FILE_STR_m12;
+			break;
+		case E_READ_ERR_m12:
+			err_str = E_READ_ERR_STR_m12;
+			break;
+		case E_WRITE_ERR_m12:
+			err_str = E_WRITE_ERR_STR_m12;
+			break;
+		case E_NOT_MED_m12:
+			err_str = E_NOT_MED_STR_m12;
+			break;
+		case E_BAD_PASSWORD_m12:
+			err_str = E_BAD_PASSWORD_STR_m12;
+			break;
+		case E_NO_METADATA_m12:
+			err_str = E_NO_METADATA_STR_m12;
+			break;
+		case E_NO_INET_m12:
+			err_str = E_NO_INET_STR_m12;
+			break;
+		default:
+			err_str = "unknown error";
+			break;
+	    }
+
+        PyErr_SetString(PyExc_RuntimeError, err_str);
+        PyErr_Occurred();
+        return NULL;
+    }
+
+
     // save off password hints before free'ing memory
     if (globals_m12 != NULL) {
         strcpy(level_1_password_hint, globals_m12->password_data.level_1_password_hint);
@@ -211,64 +246,12 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
         //globals_m12 = NULL;
     }
 
-    py_pointers = PyTuple_New(6);
-    
-    //sess = change_pointer(sess, globals_m12);
-
-    //printf("pointers: %ld %ld %ld\n", globals_m12, globals_m12, sess);
     // TODO: fix memory leak here - Jan's note: perhaps DECREF??
-    // TODO: get rid of unnecessary fields? Perhaps return two things?
-    // TODO: use PyCapsules to store pointers
-    PyTuple_SetItem(py_pointers, 0, PyLong_FromLongLong(NULL));
-    PyTuple_SetItem(py_pointers, 1, PyLong_FromLongLong(NULL));
-    PyTuple_SetItem(py_pointers, 2, PyLong_FromLongLong(sess));
-    PyTuple_SetItem(py_pointers, 3, PyLong_FromLongLong(err_code));
-    PyTuple_SetItem(py_pointers, 4, PyUnicode_FromString(level_1_password_hint));
-    PyTuple_SetItem(py_pointers, 5, PyUnicode_FromString(level_2_password_hint));
-    //PyTuple_SetItem(py_pointers, 3, PyLong_FromLong(9000000000000000000));  // near INTMAX, to test with
-
-    return py_pointers;
-}
 
 
-static PyObject *close_MED(PyObject *self, PyObject *args)
-{
-    
-    SESSION_m12             *session;
-    PyObject                *seq;
-    PyObject                *item;
-    PyObject                *pointers_obj;
-    
-    // --- Parse the input ---
-    if (!PyArg_ParseTuple(args, "O", &pointers_obj)) {
-        PyErr_SetString(PyExc_RuntimeError, "One input required: pointers\n");
-        PyErr_Occurred();
-        return NULL;
-    }
-        
-    // read pointers from param tuple
-    seq = PyObject_GetIter(pointers_obj);
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    session = (SESSION_m12*) (PyLong_AsLongLong(item));
-    //session = change_pointer(session, globals_m12);
-        
-    // cleanup
-    if (session != NULL) {
-        //fprintf(stderr, "freeing session\n");
-        G_free_session_m12(session, TRUE_m12);
-    }
-    
-    //free_globals_m12(TRUE_m12);
-    //free_globals_m12(TRUE_m12);
-    
-    //fprintf(stderr, "closing!\n");
-    
-    Py_INCREF(Py_None);
-    return Py_None;
+    sess_capsule_object = PyCapsule_New((void *) sess, "session", session_capsule_destructor);
+
+    return sess_capsule_object;
 }
 
 static PyObject *read_session_info(PyObject *self, PyObject *args)
@@ -286,7 +269,7 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
     SESSION_m12         *sess;
     PyObject* item;
     PyObject* seq;
-    PyObject                *pointers_obj;
+    PyObject                *sess_capsule_object;
     si8             n_contigua;
     si8             current_start_index, current_end_index, current_start_time, current_end_time;
 
@@ -296,21 +279,20 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
     
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"O",
-                          &pointers_obj)){
+                          &sess_capsule_object)){
         
         PyErr_SetString(PyExc_RuntimeError, "One  inputs required: pointers\n");
         PyErr_Occurred();
         return NULL;
     }
     
-    seq = PyObject_GetIter(pointers_obj);
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    sess = (SESSION_m12*) (PyLong_AsLongLong(item));
-    //sess = change_pointer(sess, globals_m12);
+    sess = (SESSION_m12 *) PyCapsule_GetPointer(sess_capsule_object, "session");
+
+    if (sess == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Error reading session pointer\n");
+        PyErr_Occurred();
+        return NULL;
+    }
 
     //show_time_slice_m12(&sess->time_slice);
     
@@ -430,7 +412,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
 {
     //char                    output_statement[1024];
     TERN_m12                samples_as_singles;
-    PyObject                *pointers_obj;
+    PyObject                *sess_capsule_object;
     PyObject                *password_input_obj;
     PyObject                *reference_channel_input_obj;
     PyObject                *samples_as_singles_input_obj;
@@ -441,8 +423,6 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     si1                     *temp_str_bytes;
     PyObject                *temp_UTF_str;
     PyObject                *py_return_object;
-    PyObject                *seq;
-    PyObject                *item;
     SESSION_m12             *session;
     
     //Py_ssize_t tuple_size = PyTuple_Size(args);
@@ -475,7 +455,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"O|OOOO",
-                          &pointers_obj,
+                          &sess_capsule_object,
                           &start_time_input_obj,
                           &end_time_input_obj,
                           &start_index_input_obj,
@@ -486,14 +466,13 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
         return NULL;
     }
     
-    seq = PyObject_GetIter(pointers_obj);
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    session = (SESSION_m12*) (PyLong_AsLongLong(item));
-    //session = change_pointer(session, globals_m12);
+    session = (SESSION_m12*)PyCapsule_GetPointer(sess_capsule_object, "session");
+
+    if (session == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Could not get session pointer from capsule\n");
+        PyErr_Occurred();
+        return NULL;
+    }
    
     
     //return Py_None;
@@ -845,17 +824,13 @@ static PyObject     *read_MED_exec(SESSION_m12 *sess, si4 n_files, si8 start_tim
                                "contigua", py_contigua,
                                "password_hints", py_password_hints);
     
-    
+    // clean up
     Py_DECREF(py_metadata);
     Py_DECREF(py_channels);
     Py_DECREF(py_records);
     Py_DECREF(py_contigua);
     Py_DECREF(py_password_hints);
-    // clean up
-    // TODO: crashing?
-    // TODO: we do not want to free session - that is done when closing python object
-    //G_free_session_m12(sess, TRUE_m12);
-    
+
     return (py_session);
 }
 
@@ -1838,11 +1813,17 @@ si4     rec_compare(const void *a, const void *b)
 
 void dm_capsule_destructor(PyObject *capsule) {
     void *dm = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
-    if (dm) {
+    if (dm != NULL) {
         DM_free_matrix_m12(dm, TRUE_m12);
-//        printf("Data matrix freed: %s\n", PyCapsule_GetName(capsule));
     }
 }
+
+void session_capsule_destructor (PyObject *capsule){
+    void *session = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
+    if (session != NULL) {
+        G_free_session_m12(session, TRUE_m12);
+    }}
+
 
 PyObject            *initialize_data_matrix(PyObject *self, PyObject *args)
 {
@@ -1857,8 +1838,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
 {
 
     SESSION_m12             *sess;
-    PyObject                *item;
-    PyObject                *pointers_obj, *dm_capsule_obj;
+    PyObject                *sess_capsule_object, *dm_capsule_obj;
     PyObject                *start_time_input_obj, *end_time_input_obj, *n_out_samps_obj;
     PyObject                *start_index_input_obj, *end_index_input_obj, *major_dimension_obj;
     PyObject                *sampling_frequency_obj;
@@ -1908,7 +1888,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
 
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"OO|OOOOOOO",
-                          &pointers_obj,
+                          &sess_capsule_object,
                           &dm_capsule_obj,
                           &start_index_input_obj,
                           &end_index_input_obj,
@@ -1924,9 +1904,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     }
 
     // Get session struct from python object
-    item = PySequence_GetItem(pointers_obj, 2);
-    sess = (SESSION_m12*) PyLong_AsLongLong(item);
-
+    sess = (SESSION_m12*) PyCapsule_GetPointer(sess_capsule_object, "sess");
     dm = (DATA_MATRIX_m12*) PyCapsule_GetPointer(dm_capsule_obj, "dm");
 
     // set defaults, in case args are NULL/None
@@ -2249,7 +2227,6 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
 
 
     // Clean up
-    Py_DECREF(item);
     Py_DECREF(py_channel_names);
     Py_DECREF(py_sampling_frequencies);
     Py_DECREF(py_records);
@@ -2867,30 +2844,27 @@ PyObject*    build_contigua_dm(DATA_MATRIX_m12 *dm)
 
 PyObject *sort_channels_by_acq_num(PyObject *self, PyObject *args)
 {
-    SESSION_m12             *session;
-    PyObject                *seq;
-    PyObject                *item;
-    PyObject                *pointers_obj;
+    SESSION_m12             *sess;
+    PyObject                *sess_capsule_object;
     
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"O",
-                          &pointers_obj)){
+                          &sess_capsule_object)){
         
         PyErr_SetString(PyExc_RuntimeError, "1 inputs required: pointers\n");
         PyErr_Occurred();
         return NULL;
     }
     
-    seq = PyObject_GetIter(pointers_obj);
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    session = (SESSION_m12*) (PyLong_AsLongLong(item));
-    //session = change_pointer(session, globals_m12);
+    sess = PyCapsule_GetPointer(sess_capsule_object, "session");
+
+    if (sess == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Session pointer is NULL\n");
+        PyErr_Occurred();
+        return NULL;
+    }
     
-    G_sort_channels_by_acq_num_m12(session);
+    G_sort_channels_by_acq_num_m12(sess);
     
     Py_INCREF(Py_None);
     return Py_None;
@@ -2903,8 +2877,7 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
     CHANNEL_m12             *chan;
     SEGMENT_m12             *seg;
     TIME_SLICE_m12          *slice;
-    PyObject                *item;
-    PyObject                *pointers_obj;
+    PyObject                *sess_capsule_object;
     PyObject                *py_session_dict;
     PyObject                *py_channels_dict, *py_channel_dict;
     PyObject                *py_segments_dict, *py_segment_dict;
@@ -2912,12 +2885,9 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
     si4                     n_channels, n_segs;
     ui8                     flags;
 
-
-    pointers_obj = NULL;
-
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"O",
-                          &pointers_obj)){
+                          &sess_capsule_object)){
 
         PyErr_SetString(PyExc_RuntimeError, "input required: pointers\n");
         PyErr_Occurred();
@@ -2927,8 +2897,7 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
     py_session_dict = Py_None;
 
     // Get session struct from python object
-    item = PySequence_GetItem(pointers_obj, 2);
-    sess = (SESSION_m12*) PyLong_AsLongLong(item);
+    sess = PyCapsule_GetPointer(sess_capsule_object, "session");
 
     // Create session dict and set session level flags
     flags = sess->header.flags;
@@ -2975,9 +2944,6 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
     // Set channels to session dict
     PyDict_SetItemString(py_session_dict, "channels", py_channels_dict);
 
-    // Clean up
-    Py_DECREF(item);
-
     return py_session_dict;
 }
 
@@ -2988,8 +2954,7 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
     CHANNEL_m12             *chan;
     SEGMENT_m12             *seg;
     TIME_SLICE_m12          *slice;
-    PyObject                *item;
-    PyObject                *pointers_obj;
+    PyObject                *sess_capsule_object;
     PyObject                *value;
     PyObject                *py_channels_dict, *py_channel_dict;
     PyObject                *py_segments_dict, *py_segment_dict;
@@ -2997,12 +2962,9 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
     si8                     i, j;
     si4                     n_channels, n_segs;
 
-
-    pointers_obj = NULL;
-
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"OO",
-                          &pointers_obj,
+                          &sess_capsule_object,
                           &flags_dict)){
 
         PyErr_SetString(PyExc_RuntimeError, "input required: pointers and flags dict\n");
@@ -3011,8 +2973,7 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
     }
 
     // Get session struct from python object
-    item = PySequence_GetItem(pointers_obj, 2);
-    sess = (SESSION_m12*) PyLong_AsLongLong(item);
+    sess = PyCapsule_GetPointer(sess_capsule_object, "session");
 
     // Set session level flags
     value = PyDict_GetItemString(flags_dict, "session_flags");
@@ -3080,9 +3041,6 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
             }
         }
     }
-
-    // Clean up
-    Py_DECREF(item);
 
     return Py_None;
 }
@@ -3261,19 +3219,17 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
 PyObject *set_channel_reference(PyObject *self, PyObject *args)
 {
     SESSION_m12             *sess;
-    PyObject                *pointers_obj, *chan_name_obj;
+    PyObject                *sess_capsule_object, *chan_name_obj;
     si1                     chan_name[BASE_FILE_NAME_BYTES_m12];
     PyObject                *temp_UTF_str;
     si1                     *temp_str_bytes;
-    PyObject                *seq;
-    PyObject                *item;
+
     
-    pointers_obj = NULL;
     chan_name_obj = NULL;
     
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"OO",
-                          &pointers_obj,
+                          &sess_capsule_object,
                           &chan_name_obj)){
         
         PyErr_SetString(PyExc_RuntimeError, "2 inputs required: pointers, chan_name\n");
@@ -3281,14 +3237,7 @@ PyObject *set_channel_reference(PyObject *self, PyObject *args)
         return NULL;
     }
         
-    seq = PyObject_GetIter(pointers_obj);
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    sess = (SESSION_m12*) (PyLong_AsLongLong(item));
-    //sess = change_pointer(sess, globals_m12);
+    sess = (SESSION_m12*) PyCapsule_GetPointer(sess_capsule_object, "session");
     
     if (chan_name_obj != NULL)
     {
@@ -3322,63 +3271,33 @@ PyObject *set_channel_reference(PyObject *self, PyObject *args)
 
 PyObject *get_globals_number_of_session_samples(PyObject *self, PyObject *args)
 {
-    SESSION_m12             *sess;
-    PyObject                *pointers_obj;
-    PyObject                *seq;
-    PyObject                *item;
-    
-    pointers_obj = NULL;
-    
-    // --- Parse the input ---
-    if (!PyArg_ParseTuple(args,"O",
-                          &pointers_obj)){
-        
-        PyErr_SetString(PyExc_RuntimeError, "2 inputs required: pointers\n");
-        PyErr_Occurred();
-        return NULL;
-    }
-        
-    seq = PyObject_GetIter(pointers_obj);
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    sess = (SESSION_m12*) (PyLong_AsLongLong(item));
-    //sess = change_pointer(sess, globals_m12);
-    
     return PyLong_FromLongLong(globals_m12->number_of_session_samples);
 }
 
 PyObject *find_discontinuities(PyObject *self, PyObject *args)
 {
     SESSION_m12             *sess;
-    PyObject                *pointers_obj;
-    PyObject                *seq;
-    PyObject                *item;
+    PyObject                *sess_capsule_object;
     si8                     i, num_contigua;
     CONTIGUON_m12           *contigua;
     PyObject                *py_contiguon, *py_contigua;
-    
-    pointers_obj = NULL;
-    
+
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"O",
-                          &pointers_obj)){
+                          &sess_capsule_object)){
         
         PyErr_SetString(PyExc_RuntimeError, "2 inputs required: pointers\n");
         PyErr_Occurred();
         return NULL;
     }
         
-    seq = PyObject_GetIter(pointers_obj);
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    sess = (SESSION_m12*) (PyLong_AsLongLong(item));
-    //sess = change_pointer(sess, globals_m12);
+    sess = (SESSION_m12*) PyCapsule_GetPointer(sess_capsule_object, "session");
+
+    if (sess == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid session pointer\n");
+        PyErr_Occurred();
+        return NULL;
+    }
     
     // find contiguous segments
     contigua = G_find_discontinuities_m12((LEVEL_HEADER_m12 *) sess, &num_contigua);
@@ -3405,9 +3324,7 @@ PyObject *find_discontinuities(PyObject *self, PyObject *args)
 PyObject *get_session_records(PyObject *self, PyObject *args)
 {
     SESSION_m12             *sess;
-    PyObject                *pointers_obj;
-    PyObject                *seq;
-    PyObject                *item;
+    PyObject                *sess_capsule_object;
     si8                     start_time, end_time;
     TIME_SLICE_m12          local_sess_slice, *sess_slice;
     ui8                     flags;
@@ -3416,7 +3333,6 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
     PyObject                *temp_UTF_str;
     PyObject                *py_records;
     
-    pointers_obj = NULL;
     start_time_input_obj = NULL;
     end_time_input_obj = NULL;
     
@@ -3426,7 +3342,7 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
     
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"OOO",
-                          &pointers_obj,
+                          &sess_capsule_object,
                           &start_time_input_obj,
                           &end_time_input_obj)){
         
@@ -3435,14 +3351,7 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
         return NULL;
     }
         
-    seq = PyObject_GetIter(pointers_obj);
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    //globals_m12 = (GLOBALS_m12*) (PyLong_AsLongLong(item));
-    item=PyIter_Next(seq);
-    sess = (SESSION_m12*) (PyLong_AsLongLong(item));
-    //sess = change_pointer(sess, globals_m12);
+    sess = (SEGMENT_m12*) PyCapsule_GetPointer(sess_capsule_object, "session");
     
     // process start time
     if (start_time_input_obj != NULL)
