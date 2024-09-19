@@ -25,14 +25,14 @@ from os import major
 
 # Local imports
 from .medlib_flags import FLAGS
-from .med_file.dhnmed_file import (open_MED, read_MED,
+from .med_file.dhnmed_file import (initialize_session, open_MED, read_MED,
                                    read_session_info,
                                    sort_channels_by_acq_num, set_channel_reference,
                                    get_globals_number_of_session_samples, find_discontinuities, get_session_records,
                                    read_lh_flags, push_lh_flags,
                                    initialize_data_matrix, read_dm_flags, push_dm_flags, get_dm)
 
-class MedDataMatrix():
+class MedDataMatrix:
     """
 
     """
@@ -40,21 +40,21 @@ class MedDataMatrix():
     class InvalidArgumentException(Exception):
         pass
 
-    __dm_metadata = None
+    __dm_capsule = None
 
     __valid_filters = ['none', 'antialias', 'lowpass', 'highpass', 'bandpass', 'bandstop']
 
     __valid_major_dimensions = ['channel', 'sample']
 
-    def __init__(self, __sess_metadata):
-        self.__sess_metadata = __sess_metadata
+    def __init__(self, __sess_capsule):
+        self.__sess_capsule = __sess_capsule
 
         # Set defaults for matrix operations
         self.__relative_indexing = True
         self.__return_records = True
 
         # Initialize data matrix
-        self.__dm_metadata = initialize_data_matrix()
+        self.__dm_capsule = initialize_data_matrix()
 
         # Set up default flags for matrix
         dm_flags = self._get_dm_flags()
@@ -80,7 +80,7 @@ class MedDataMatrix():
 
     # ----- Flag functions -----
     def _get_dm_flags(self):
-        dm_flags = read_dm_flags(self.__dm_metadata)
+        dm_flags = read_dm_flags(self.__dm_capsule)
 
         # Session level
         dm_flag_binary = format(dm_flags['data_matrix_flags'], '064b')[::-1]
@@ -105,7 +105,7 @@ class MedDataMatrix():
         flag_int = int(flag_str, 2)
         dm_flags['data_matrix_flags'] = flag_int
 
-        push_dm_flags(self.__dm_metadata, dm_flags)
+        push_dm_flags(self.__dm_capsule, dm_flags)
 
     # ----- Properties (exposed to user) -----
 
@@ -369,8 +369,8 @@ class MedDataMatrix():
             dm_flags['DM_EXTMD_SAMP_COUNT_m12'] = True
         self._set_dm_flags(dm_flags)
 
-        self.matrix = get_dm(self.__sess_metadata,
-                             self.__dm_metadata,
+        self.matrix = get_dm(self.__sess_capsule,
+                             self.__dm_capsule,
                              None, None,
                              start_time, end_time,
                              sample_count, sampling_frequency,
@@ -426,8 +426,8 @@ class MedDataMatrix():
                 channel_count : int
         """
 
-        self.matrix = get_dm(self.__sess_metadata,
-                             self.__dm_metadata,
+        self.matrix = get_dm(self.__sess_capsule,
+                             self.__dm_capsule,
                              start_index, end_index,
                              None, None,
                              sample_count, sampling_frequency,
@@ -436,8 +436,8 @@ class MedDataMatrix():
         return self.matrix
 
     def close(self):
-        if self.__dm_metadata is not None:
-            self.__dm_metadata = None
+        if self.__dm_capsule is not None:
+            self.__dm_capsule = None
 
         return
 
@@ -491,14 +491,31 @@ class MedSession:
     class InvalidArgumentException(Exception):
         pass
     
-    __sess_metadata = None
-    
-    # __valid_filters = ['none', 'antialias', 'lowpass', 'highpass', 'bandpass', 'bandstop']
-    #
-    # __valid_major_dimensions = ['channel', 'sample']
+    __sess_capsule = None
+
+
+
 
 
     def __init__(self, session_path, password=None, reference_channel=None):
+
+        # Initialize session capsule
+        self.__sess_capsule = initialize_session()
+
+        # Set default flags
+        lh_flags = self._get_lh_flags()
+
+        lh_flags['session_level_lh_flags']['LH_INCLUDE_TIME_SERIES_CHANNELS_m12'] = True
+        lh_flags['session_level_lh_flags']['LH_MAP_ALL_TIME_SERIES_CHANNELS_m12'] = True
+        lh_flags['session_level_lh_flags']['LH_MAP_ALL_SEGMENTS_m12'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SESSION_RECORDS_m12'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEGMENTED_SESS_RECS_m12'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_CHANNEL_RECORDS_m12'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEGMENT_RECORDS_m12'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEGMENT_DATA_m12'] = True
+        lh_flags['session_level_lh_flags']['LH_GENERATE_EPHEMERAL_DATA_m12'] = True
+        self._set_lh_flags(lh_flags)
+
 
         # Set default for class destructor
         self.__close_on_destruct = True
@@ -513,33 +530,22 @@ class MedSession:
             
         # this catches exception due to being unable to read license
         try:
-            self.__sess_metadata = open_MED(session_path, password)
-        except:
-            MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
+            open_MED(self.__sess_capsule, session_path, password)
+        except Exception as e:
+            print(e)
 
         # this should never happen, but check for it anyway
         try:
-            if self.__sess_metadata is None:
+            if self.__sess_capsule is None:
                 raise MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
         except:
             raise MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
 
-        # TODO: try and error here to check for golobal errors and handle them in python
-        # # check for incorrect password entered
-        # if self.__sess_metadata[3] == 5:
-        #     level_1_hint = self.__sess_metadata[4]
-        #     level_2_hint = self.__sess_metadata[5]
-        #     raise MedSession.BadPasswordException("Password is invalid: Unable to open session: " + str(session_path) + ". Level 1 password hint: " + str(level_1_hint) + ", Level 2 password hint: " + str(level_2_hint))
-        #
-        # # otherwise, just throw an error message
-        # if self.__sess_metadata[2] == 0:
-        #     raise MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
-            
         if reference_channel is not None:
             self.set_reference_channel(reference_channel)
             
         # read channel/session metadata
-        self.session_info = read_session_info(self.__sess_metadata)
+        self.session_info = read_session_info(self.__sess_capsule)
         
         # Set defaults for matrix operations
         self.__major_dimension = "channel"
@@ -551,14 +557,14 @@ class MedSession:
         self.__return_trace_ranges = False
 
         # Create data matrix
-        self.data_matrix = MedDataMatrix(self.__sess_metadata)
+        self.data_matrix = MedDataMatrix(self.__sess_capsule)
         
         return
 
     # ----- Private functions -----
     def _get_lh_flags(self):
 
-        lh_flags = read_lh_flags(self.__sess_metadata)
+        lh_flags = read_lh_flags(self.__sess_capsule)
         lh_flag_state = {}
 
         # Session level
@@ -645,7 +651,7 @@ class MedSession:
                 flag_int = int(flag_str, 2)
                 lh_flags['channels'][channel]['segments'][segment] = {'segment_flags': flag_int}
 
-        push_lh_flags(self.__sess_metadata, lh_flags)
+        push_lh_flags(self.__sess_capsule, lh_flags)
 
         return None
 
@@ -686,10 +692,10 @@ class MedSession:
                 password_hints : list of str
         """
     
-        if self.__sess_metadata is None:
+        if self.__sess_capsule is None:
             raise MedSession.ReadSessionException("Unable to read session!  Session is invalid.")
         
-        self.data = read_MED(self.__sess_metadata, int(start_time), int(end_time))
+        self.data = read_MED(self.__sess_capsule, int(start_time), int(end_time))
         
         return self.data
         
@@ -724,10 +730,10 @@ class MedSession:
                 password_hints : list of str
         """
     
-        if self.__sess_metadata is None:
+        if self.__sess_capsule is None:
             raise MedSession.ReadSessionException("Unable to read session!  Session is invalid.")
 
-        self.data = read_MED(self.__sess_metadata, "no_entry", "no_entry", int(start_idx), int(end_idx))
+        self.data = read_MED(self.__sess_capsule, "no_entry", "no_entry", int(start_idx), int(end_idx))
         
         return self.data
         
@@ -735,8 +741,8 @@ class MedSession:
 
         self.data_matrix.close()
 
-        if self.__sess_metadata is not None:
-            self.__sess_metadata = None
+        if self.__sess_capsule is not None:
+            self.__sess_capsule = None
 
         return
         
@@ -795,7 +801,7 @@ class MedSession:
     #     if (sampling_frequency is not None) and (sample_count is not None):
     #         raise MedSession.InvalidArgumentException("Invalid arguments: sampling_frequency and sample_count can't both be specified.")
     #
-    #     self.matrix = get_raw_page(self.__sess_metadata, None, None, self.__major_dimension,
+    #     self.matrix = get_raw_page(self.__sess_capsule, None, None, self.__major_dimension,
     #         start_time, end_time, sample_count, sampling_frequency, self.__relative_indexing, self.__padding,
     #         self.__filter_type, None, None, self.__detrend, self.__return_records,
     #         self.__return_trace_ranges)
@@ -850,7 +856,7 @@ class MedSession:
     #             channel_count : int
     #     """
     #
-    #     self.matrix = get_raw_page(self.__sess_metadata, start_index, end_index, self.__major_dimension,
+    #     self.matrix = get_raw_page(self.__sess_capsule, start_index, end_index, self.__major_dimension,
     #         None, None, sample_count, sampling_frequency, self.__relative_indexing, self.__padding,
     #         self.__filter_type, None, None, self.__detrend, self.__return_records,
     #         self.__return_trace_ranges)
@@ -871,17 +877,17 @@ class MedSession:
         None
         """
     
-        sort_channels_by_acq_num(self.__sess_metadata)
+        sort_channels_by_acq_num(self.__sess_capsule)
         
         # read channel/session metadata
-        self.session_info = read_session_info(self.__sess_metadata)
+        self.session_info = read_session_info(self.__sess_capsule)
         
         return
         
 
     # def __set_single_channel_active(self, chan_name, is_active):
     #
-    #     set_single_channel_active(self.__sess_metadata, chan_name, is_active)
+    #     set_single_channel_active(self.__sess_capsule, chan_name, is_active)
     #
     #     return
         
@@ -941,7 +947,7 @@ class MedSession:
 
         self._set_lh_flags(lh_flags)
 
-        self.session_info = read_session_info(self.__sess_metadata)
+        self.session_info = read_session_info(self.__sess_capsule)
         
         return
         
@@ -1009,7 +1015,7 @@ class MedSession:
     #     if not isinstance(chan_name, str):
     #         raise MedSession.InvalidArgumentException("Argument must be a string.")
     #
-    #     set_channel_reference(self.__sess_metadata, chan_name)
+    #     set_channel_reference(self.__sess_capsule, chan_name)
     #
     #
     # def set_trace_ranges(self, value):
@@ -1125,7 +1131,7 @@ class MedSession:
         value: int
         """
     
-        return get_globals_number_of_session_samples(self.__sess_metadata)
+        return get_globals_number_of_session_samples(self.__sess_capsule)
         
     def find_discontinuities(self):
         """
@@ -1151,7 +1157,7 @@ class MedSession:
         contigua : list of contigua dicts (continuous data ranges)
         """
     
-        return find_discontinuities(self.__sess_metadata)
+        return find_discontinuities(self.__sess_capsule)
         
     def get_session_records(self, start_time='start', end_time='end'):
         """
@@ -1173,7 +1179,7 @@ class MedSession:
         records : list of record dicts
         """
     
-        return get_session_records(self.__sess_metadata, start_time, end_time)
+        return get_session_records(self.__sess_capsule, start_time, end_time)
 
     @property
     def close_on_destruct(self):
@@ -1212,7 +1218,7 @@ class MedSession:
         
     def __del__(self):
     
-        if self.__sess_metadata is not None and self.__close_on_destruct is True:
+        if self.__sess_capsule is not None and self.__close_on_destruct is True:
             self.close()
         return
     

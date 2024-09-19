@@ -80,6 +80,17 @@ si8 *change_pointer(SESSION_m12 *sess, GLOBALS_m12 *globals_m12)
     
 }
 
+PyObject            *initialize_session(PyObject *self, PyObject *args)
+{
+    SESSION_m12         *sess;
+
+    // initialize MED library
+    G_initialize_medlib_m12(FALSE_m12, FALSE_m12);
+
+    sess = (SESSION_m12 *) calloc_m12((size_t) 1, sizeof(SESSION_m12), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
+    return PyCapsule_New((void *) sess, "session", session_capsule_destructor);
+}
+
 static PyObject *open_MED(PyObject *self, PyObject *args)
 {
     SESSION_m12                             *sess;
@@ -90,7 +101,6 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     si1                     password[PASSWORD_BYTES_m12];
     si1                     level_1_password_hint[PASSWORD_HINT_BYTES_m12];
     si1                     level_2_password_hint[PASSWORD_HINT_BYTES_m12];
-    ui8                                     flags;
     PyObject                *password_input_obj;
     PyObject                *file_list_seq_obj;
     PyObject* file_list_obj;
@@ -98,6 +108,7 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     TIME_SLICE_m12    slice;
     int                     err_code;
     si1                     *err_str;
+    si1                     pwd_hint_str[256];
     si8                     *py_pointer_changed;
     PyObject                *sess_capsule_object;
     
@@ -106,7 +117,8 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     //printf("pointer size = %d\n", sizeof(PyObject*));
     
     // --- Parse the input ---
-    if (!PyArg_ParseTuple(args,"O|O",
+    if (!PyArg_ParseTuple(args,"OO|O",
+                          &sess_capsule_object,
                           &file_list_obj,
                           &password_input_obj)){
         
@@ -115,12 +127,14 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
         return NULL;
     }
     PROC_adjust_open_file_limit_m12(MAX_OPEN_FILES_m12(1024, 1), TRUE_m12);
-    
-    // initialize MED library
-    G_initialize_medlib_m12(FALSE_m12, FALSE_m12);
-    
-    sess = NULL;
-    //globals_m12->session_start_time = 11;
+
+    sess = PyCapsule_GetPointer(sess_capsule_object, "session");
+
+    if (sess == NULL) {
+        PyErr_SetString(PyExc_RuntimeError, "Invalid session pointer");
+        PyErr_Occurred();
+        return NULL;
+    }
 
     if (PyUnicode_Check(file_list_obj)) {
         file_list = calloc_m12((size_t) FULL_FILE_NAME_BYTES_m12, sizeof(si1), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
@@ -129,7 +143,7 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
         strcpy(file_list,temp_str_bytes);
         n_files = 0;  // "make list_len zero to indicate a one dimention char array" (from medlib_m12.c)
     } else {
-        
+        // TODO - do we ever get here? Ask Matt about this....
         file_list_seq_obj = PySequence_Fast(file_list_obj, "Expected a tuple or list for start." );
 
         n_files = PySequence_Fast_GET_SIZE(file_list_seq_obj);
@@ -179,18 +193,21 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     globals_m12->behavior_on_fail = RETURN_ON_FAIL_m12;
     G_initialize_time_slice_m12(&slice);  // this defaults to full session if nothing specified
 
-	flags = LH_INCLUDE_TIME_SERIES_CHANNELS_m12 |
-		LH_MAP_ALL_TIME_SERIES_CHANNELS_m12 |
-		LH_MAP_ALL_SEGMENTS_m12 |
-		LH_READ_SLICE_ALL_RECORDS_m12 |
-		LH_READ_SLICE_SEGMENT_DATA_m12 |
-		LH_GENERATE_EPHEMERAL_DATA_m12;
-		
     slice.start_time = BEGINNING_OF_TIME_m12;
     slice.end_time = END_OF_TIME_m12;
 
-    sess = G_open_session_m12(NULL, &slice, file_list, n_files, flags, password);
+    sess = G_open_session_m12(sess, &slice, file_list, n_files, 0, password);
 
+    // Save off password hints
+    if (globals_m12 != NULL) {
+        strcpy(level_1_password_hint, globals_m12->password_data.level_1_password_hint);
+        strcpy(level_2_password_hint, globals_m12->password_data.level_2_password_hint);
+    } else {
+        strcpy(level_1_password_hint, "<none>");
+        strcpy(level_2_password_hint, "<none>");
+    }
+
+    // TODO - ask Matt how this is handled. If there is incorrect password then we do not get the err code
     err_code = globals_m12->err_code;
     if (err_code != 0) {
         switch (globals_m12->err_code) {
@@ -210,7 +227,8 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
 			err_str = E_NOT_MED_STR_m12;
 			break;
 		case E_BAD_PASSWORD_m12:
-			err_str = E_BAD_PASSWORD_STR_m12;
+		    snprintf(pwd_hint_str, sizeof(pwd_hint_str), "Password is invalid. Level 1 password hint: %s, Level 2 password hint: %s", level_1_password_hint, level_2_password_hint);
+			err_str = &pwd_hint_str;
 			break;
 		case E_NO_METADATA_m12:
 			err_str = E_NO_METADATA_STR_m12;
@@ -228,30 +246,10 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
         return NULL;
     }
 
+    // TODO: there was a memory leak here - verify
 
-    // save off password hints before free'ing memory
-    if (globals_m12 != NULL) {
-        strcpy(level_1_password_hint, globals_m12->password_data.level_1_password_hint);
-        strcpy(level_2_password_hint, globals_m12->password_data.level_2_password_hint);
-    } else {
-        strcpy(level_1_password_hint, "<none>");
-        strcpy(level_2_password_hint, "<none>");
-    }
-    
-    // if it didn't work, just bail out!
-    if (sess == NULL) {
-        //free_globals_m12(TRUE_m12);
-        //free_globals_m12(TRUE_m12);
-        //globals_m12 = NULL;
-        //globals_m12 = NULL;
-    }
-
-    // TODO: fix memory leak here - Jan's note: perhaps DECREF??
-
-
-    sess_capsule_object = PyCapsule_New((void *) sess, "session", session_capsule_destructor);
-
-    return sess_capsule_object;
+    Py_INCREF(Py_None);
+    return Py_None;
 }
 
 static PyObject *read_session_info(PyObject *self, PyObject *args)
@@ -1819,9 +1817,9 @@ void dm_capsule_destructor(PyObject *capsule) {
 }
 
 void session_capsule_destructor (PyObject *capsule){
-    void *session = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
-    if (session != NULL) {
-        G_free_session_m12(session, TRUE_m12);
+    void *sess = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
+    if (sess != NULL) {
+        G_free_session_m12(sess, TRUE_m12);
     }}
 
 
@@ -1904,7 +1902,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     }
 
     // Get session struct from python object
-    sess = (SESSION_m12*) PyCapsule_GetPointer(sess_capsule_object, "sess");
+    sess = (SESSION_m12*) PyCapsule_GetPointer(sess_capsule_object, "session");
     dm = (DATA_MATRIX_m12*) PyCapsule_GetPointer(dm_capsule_obj, "dm");
 
     // set defaults, in case args are NULL/None
@@ -2098,15 +2096,17 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
         }
     }
 
-    //printf("sampling_frequency=%f\n", sampling_frequency);
+//    printf("sampling_frequency=%f\n", sampling_frequency);
 
     if (return_records_obj != NULL)
     {
         if (PyBool_Check(return_records_obj)) {
-            if (return_records_obj == Py_True)
+            if (PyObject_IsTrue(return_records_obj)){
                 return_records = TRUE_m12;
-            else
+                }
+            else{
                 return_records = FALSE_m12;
+                }
         } else {
             PyErr_SetString(PyExc_RuntimeError, "return_records (input 8) must be specified as a boolean\n");
             PyErr_Occurred();
@@ -2122,7 +2122,6 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     slice.end_time = end_time;
     slice.start_sample_number = start_index;
     slice.end_sample_number = end_index;
-    // show_time_slice_m12(&slice);
 
     // Get data matrix pointer
 
@@ -2135,7 +2134,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     dm->data = NULL;
     dm->range_minima = NULL;
     dm->range_maxima = NULL;
-    //printf("samps=%d freq=%f\n",n_out_samps, sampling_frequency);
+//    printf("samps=%d freq=%f\n",n_out_samps, sampling_frequency);
 
     // Build matrix
     dm = DM_get_matrix_m12(dm, sess, &slice, FALSE_m12);
@@ -2201,13 +2200,12 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
         mins = (PyArrayObject *) PyArray_SimpleNewFromData(2, dims, NPY_DOUBLE, (void *) dm->range_minima);
         // The following line is necessary to tell NumPy that it now owns the data.  Without that line,
         // the array will never get garbage-collected.
-        PyArray_ENABLEFLAGS((PyArrayObject*) mins, NPY_ARRAY_OWNDATA); //TODO: set DM to NULL
+        PyArray_ENABLEFLAGS((PyArrayObject*) mins, NPY_ARRAY_OWNDATA);
         maxs = (PyArrayObject *) PyArray_SimpleNewFromData(2, dims, NPY_DOUBLE, (void *) dm->range_maxima);
         // The following line is necessary to tell NumPy that it now owns the data.  Without that line,
         // the array will never get garbage-collected.
         PyArray_ENABLEFLAGS((PyArrayObject*) maxs, NPY_ARRAY_OWNDATA);
     }
-
 
     raw_page = Py_BuildValue("{s:L,s:s,s:L,s:s,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:f,s:L,s:L}",
                              "start_time", slice.start_time,

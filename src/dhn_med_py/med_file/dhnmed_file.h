@@ -66,6 +66,7 @@ static char read_MED_docstring[] =
 
 static PyObject *test_api(PyObject *self, PyObject *args);
 void session_capsule_destructor(PyObject *capsule);
+static PyObject *initialize_session(PyObject *self, PyObject *args);
 static PyObject *read_MED(PyObject *self, PyObject *args);
 static PyObject *open_MED(PyObject *self, PyObject *args);
 static PyObject *read_session_info(PyObject *self, PyObject *args);
@@ -88,6 +89,7 @@ static PyObject *get_dm(PyObject *self, PyObject *args);
 /* Specification of the members of the module */
 static PyMethodDef module_methods[] = {
     {"test_api", test_api, METH_VARARGS, test_api_docstring},
+    {"initialize_session", initialize_session, METH_VARARGS, read_MED_docstring},
     {"read_MED", read_MED, METH_VARARGS, read_MED_docstring},
     {"open_MED", open_MED, METH_VARARGS, read_MED_docstring},
     {"read_session_info", read_session_info, METH_VARARGS, read_MED_docstring},
