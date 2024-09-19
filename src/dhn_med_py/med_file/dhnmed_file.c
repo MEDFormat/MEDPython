@@ -3214,6 +3214,11 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
 //    return Py_None;
 //}
 
+PyObject *get_channel_reference(PyObject *self, PyObject *args)
+{
+    return PyUnicode_FromString(globals_m12->reference_channel_name);
+}
+
 PyObject *set_channel_reference(PyObject *self, PyObject *args)
 {
     SESSION_m12             *sess;

@@ -27,7 +27,8 @@ from os import major
 from .medlib_flags import FLAGS
 from .med_file.dhnmed_file import (initialize_session, open_MED, read_MED,
                                    read_session_info,
-                                   sort_channels_by_acq_num, set_channel_reference,
+                                   sort_channels_by_acq_num,
+                                   set_channel_reference, get_channel_reference,
                                    get_globals_number_of_session_samples, find_discontinuities, get_session_records,
                                    read_lh_flags, push_lh_flags,
                                    initialize_data_matrix, read_dm_flags, push_dm_flags, get_dm)
@@ -989,33 +990,55 @@ class MedSession:
     #
     #     return
     #
-    # def set_reference_channel(self, chan_name):
-    #     """
-    #     Sets the reference channel to be the string specified.
-    #
-    #     In general, reference values are used when reading across many channels, but the channels
-    #     have different sampling frequencies.
-    #
-    #     For example, If channel 1 has a frequency of 5000 Hz, and channel 2 has a frequency of 10000 Hz,
-    #     then if you read from sample 0 to 4999, you will recieve either 1 second or 2 seconds of data,
-    #     depending on which channel is the reference channel.
-    #
-    #     Reference channels are not used when using timestamps to specify start/end ranges for data
-    #     reading.
-    #
-    #     Parameters
-    #     ---------
-    #     chan_name: str
-    #
-    #     Returns
-    #     -------
-    #     None
-    #     """
-    #
-    #     if not isinstance(chan_name, str):
-    #         raise MedSession.InvalidArgumentException("Argument must be a string.")
-    #
-    #     set_channel_reference(self.__sess_capsule, chan_name)
+    def set_reference_channel(self, chan_name):
+        """
+        Sets the reference channel to be the string specified.
+
+        In general, reference values are used when reading across many channels, but the channels
+        have different sampling frequencies.
+
+        For example, If channel 1 has a frequency of 5000 Hz, and channel 2 has a frequency of 10000 Hz,
+        then if you read from sample 0 to 4999, you will receive either 1 second or 2 seconds of data,
+        depending on which channel is the reference channel.
+
+        Reference channels are not used when using timestamps to specify start/end ranges for data
+        reading.
+
+        Parameters
+        ---------
+        chan_name: str
+
+        Returns
+        -------
+        None
+        """
+
+        if not isinstance(chan_name, str):
+            raise MedSession.InvalidArgumentException("Argument must be a string.")
+
+        set_channel_reference(self.__sess_capsule, chan_name)
+
+    def get_reference_channel(self):
+        """
+        Returns the name of the current reference channel.
+
+        In general, reference values are used when reading across many channels, but the channels
+        have different sampling frequencies.
+
+        For example, If channel 1 has a frequency of 5000 Hz, and channel 2 has a frequency of 10000 Hz,
+        then if you read from sample 0 to 4999, you will receive either 1 second or 2 seconds of data,
+        depending on which channel is the reference channel.
+
+        Reference channels are not used when using timestamps to specify start/end ranges for data
+        reading.
+
+        Returns
+        -------
+        str
+            name of the current reference channel.
+        """
+        return get_channel_reference()
+
     #
     #
     # def set_trace_ranges(self, value):
