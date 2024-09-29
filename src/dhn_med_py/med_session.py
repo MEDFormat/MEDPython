@@ -12,9 +12,6 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program. If not, see <http://www.gnu.org/licenses/>.
-from os import major
-
-#!/usr/bin/env python3
 
 #***********************************************************************//
 #******************  DARK HORSE NEURO MED Python API  ******************//
@@ -25,7 +22,8 @@ from os import major
 
 # Local imports
 from .medlib_flags import FLAGS
-from .med_file.dhnmed_file import (initialize_session, open_MED, read_MED,
+from .med_file.dhnmed_file import (initialize_session, open_MED,
+                                   read_MED,
                                    read_session_info,
                                    sort_channels_by_acq_num,
                                    set_channel_reference, get_channel_reference,
@@ -427,6 +425,19 @@ class MedDataMatrix:
                 channel_count : int
         """
 
+        if (sampling_frequency is not None) and (sample_count is not None):
+            raise MedSession.InvalidArgumentException(
+                "Invalid arguments: sampling_frequency and sample_count can't both be specified.")
+
+        dm_flags = self._get_dm_flags()
+        if sampling_frequency is not None:
+            dm_flags['DM_EXTMD_SAMP_FREQ_m12'] = True
+            dm_flags['DM_EXTMD_SAMP_COUNT_m12'] = False
+        else:
+            dm_flags['DM_EXTMD_SAMP_FREQ_m12'] = False
+            dm_flags['DM_EXTMD_SAMP_COUNT_m12'] = True
+        self._set_dm_flags(dm_flags)
+
         self.matrix = get_dm(self.__sess_capsule,
                              self.__dm_capsule,
                              start_index, end_index,
@@ -503,10 +514,14 @@ class MedSession:
         # Initialize session capsule
         self.__sess_capsule = initialize_session()
 
+        # Set default for class destructor
+        self.__close_on_destruct = True
+
         # Set default flags
         lh_flags = self._get_lh_flags()
 
-        lh_flags['session_level_lh_flags']['LH_INCLUDE_TIME_SERIES_CHANNELS_m12'] = True
+        #lh_flags['session_level_lh_flags']['LH_INCLUDE_TIME_SERIES_CHANNELS_m12'] = True
+        lh_flags['session_level_lh_flags']['LH_EXCLUDE_VIDEO_CHANNELS_m12'] = True
         lh_flags['session_level_lh_flags']['LH_MAP_ALL_TIME_SERIES_CHANNELS_m12'] = True
         lh_flags['session_level_lh_flags']['LH_MAP_ALL_SEGMENTS_m12'] = True
         lh_flags['session_level_lh_flags']['LH_READ_SLICE_SESSION_RECORDS_m12'] = True
@@ -516,10 +531,6 @@ class MedSession:
         lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEGMENT_DATA_m12'] = True
         lh_flags['session_level_lh_flags']['LH_GENERATE_EPHEMERAL_DATA_m12'] = True
         self._set_lh_flags(lh_flags)
-
-
-        # Set default for class destructor
-        self.__close_on_destruct = True
       
         if password is not None:
             if not isinstance(password, str):
@@ -528,12 +539,8 @@ class MedSession:
         if reference_channel is not None:
             if not isinstance(reference_channel, str):
                 raise MedSession.InvalidArgumentException("Invalid argument: reference channel must be a string.")
-            
-        # this catches exception due to being unable to read license
-        try:
-            open_MED(self.__sess_capsule, session_path, password)
-        except Exception as e:
-            print(e)
+
+        open_MED(self.__sess_capsule, session_path, password)
 
         # this should never happen, but check for it anyway
         try:
@@ -547,15 +554,6 @@ class MedSession:
             
         # read channel/session metadata
         self.session_info = read_session_info(self.__sess_capsule)
-        
-        # Set defaults for matrix operations
-        self.__major_dimension = "channel"
-        self.__relative_indexing = True
-        self.__filter_type = "antialias"
-        self.__detrend = False
-        self.__return_records = True
-        self.__padding = "none"
-        self.__return_trace_ranges = False
 
         # Create data matrix
         self.data_matrix = MedDataMatrix(self.__sess_capsule)
@@ -656,9 +654,13 @@ class MedSession:
 
         return None
 
+    def get_channel_names(self):
+        channel_names = []
+        for channel in self.session_info['channels']:
+            channel_names.append(channel['metadata']['channel_name'])
+        return channel_names
 
-    # ----- Public functions -----
-    def read_by_time(self, start_time, end_time):
+    def read_by_time(self, start_time, end_time, channels=None):
         """
         Read all active channels of a MED session, by specifying start and end times.
         
@@ -679,6 +681,8 @@ class MedSession:
             see note above on absolute vs. relative times
         end_time: int
             end_time is exclusive, per python conventions.
+        channels: str or list
+            Single channel or list of channels to read.  If not specified, then all active channels will be read.
 
         Returns
         -------
@@ -695,12 +699,29 @@ class MedSession:
     
         if self.__sess_capsule is None:
             raise MedSession.ReadSessionException("Unable to read session!  Session is invalid.")
-        
-        self.data = read_MED(self.__sess_capsule, int(start_time), int(end_time))
+
+        # Activate specified channels
+        if channels is not None:
+            channel_names = self.get_channel_names()
+            curr_active_channels = []
+            lh_flags = self._get_lh_flags()
+            for channel in channel_names:
+                if lh_flags['channels'][channel]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] is True:
+                    curr_active_channels.append(channel)
+            self.set_channel_active(channel_names, False)
+            self.set_channel_active(channels, True)
+
+            self.data = read_MED(self.__sess_capsule, int(start_time), int(end_time))
+
+            self.set_channel_active(channel_names, False)
+            self.set_channel_active(curr_active_channels, True)
+        else:
+            self.data = read_MED(self.__sess_capsule, int(start_time), int(end_time))
+
         
         return self.data
         
-    def read_by_index(self, start_idx, end_idx):
+    def read_by_index(self, start_idx, end_idx, channels=None):
         """
         Read all active channels of a MED session, by specifying start and end sample numbers.
         
@@ -717,6 +738,8 @@ class MedSession:
             start_idx is inclusive.
         end_idx: int
             end_idx is exclusive, per python conventions.
+        channels: str or list
+            Single channel or list of channels to read.  If not specified, then all active channels will be read.
 
         Returns
         -------
@@ -734,8 +757,24 @@ class MedSession:
         if self.__sess_capsule is None:
             raise MedSession.ReadSessionException("Unable to read session!  Session is invalid.")
 
-        self.data = read_MED(self.__sess_capsule, "no_entry", "no_entry", int(start_idx), int(end_idx))
-        
+        # Activate specified channels
+        if channels is not None:
+            channel_names = self.get_channel_names()
+            curr_active_channels = []
+            lh_flags = self._get_lh_flags()
+            for channel in channel_names:
+                if lh_flags['channels'][channel]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] is True:
+                    curr_active_channels.append(channel)
+            self.set_channel_active(channel_names, False)
+            self.set_channel_active(channels, True)
+
+            self.data = read_MED(self.__sess_capsule, "no_entry", "no_entry", int(start_idx), int(end_idx))
+
+            self.set_channel_active(channel_names, False)
+            self.set_channel_active(curr_active_channels, True)
+        else:
+            self.data = read_MED(self.__sess_capsule, "no_entry", "no_entry", int(start_idx), int(end_idx))
+
         return self.data
         
     def close(self):
@@ -746,124 +785,6 @@ class MedSession:
             self.__sess_capsule = None
 
         return
-        
-    # def get_matrix_by_time(self, start_time='start', end_time='end', sampling_frequency=None, sample_count=None):
-    #     """
-    #     Read all active channels of a MED session, by specifying start and end times.
-    #
-    #     Times are specified in absolute uUTC (micro UTC) time, or negative times can be
-    #     specified to refer to the beginning of the recording.  For example, reading the
-    #     first 10 seconds of a session would look like:
-    #     sess.get_matrix_by_time(0, -10 * 1000000, num_out_samps)
-    #
-    #     Arguments 3 and 4 are sampling_frequency and sample_count, which refer to the size
-    #     of the output matrix. At least one of them must be specified, but not both.
-    #
-    #     This function returns a "matrix", which includes a "samples" array.  The array is a
-    #     2-dimensional NumPy array, with the axes being channels and samples.  Such an array
-    #     is optimized for viewer purposes.
-    #
-    #     The default filter setting is 'antialias' which is applied when downsampling occurs.
-    #
-    #     Parameters
-    #     ---------
-    #     start_time: int
-    #         start_time is inclusive.
-    #     end_time: int
-    #         end_time is exclusive, per python conventions.
-    #     sampling_frequency: float
-    #         desired sampling frequency of output matrix
-    #     sample_count: int
-    #         number of output samples
-    #
-    #     Returns
-    #     -------
-    #     matrix: dict
-    #         matrix data structure is the output of this function.  A reference to this data is
-    #         also stored in MedSession.matrix (class member variable).
-    #
-    #         Contents of matrix dict are:
-    #             start_time : int
-    #             start_time_string : str
-    #             end_time : int
-    #             end_time_string : str
-    #             channel_names : list of str
-    #             channel_sampling_frequencies : list of floats
-    #             contigua : list of contigua dicts (continuous data ranges)
-    #             records : list of record dicts
-    #             samples : 2D NumPy array
-    #             minima : Numpy array or None
-    #             maxima : Numpy array or None
-    #             sampling_frequency : float
-    #             sample_count : int
-    #             channel_count : int
-    #     """
-    #
-    #     if (sampling_frequency is not None) and (sample_count is not None):
-    #         raise MedSession.InvalidArgumentException("Invalid arguments: sampling_frequency and sample_count can't both be specified.")
-    #
-    #     self.matrix = get_raw_page(self.__sess_capsule, None, None, self.__major_dimension,
-    #         start_time, end_time, sample_count, sampling_frequency, self.__relative_indexing, self.__padding,
-    #         self.__filter_type, None, None, self.__detrend, self.__return_records,
-    #         self.__return_trace_ranges)
-    #
-    #     return self.matrix
-    #
-    # def get_matrix_by_index(self, start_index, end_index, sampling_frequency=None, sample_count=None):
-    #     """
-    #     Read all active channels of a MED session, by specifying start and end sample indices.
-    #
-    #     Indicies (or sample numbers) are referenced to a "reference channel" which can be
-    #     specified in the constructor to MedSession, or using the set_reference_channel()
-    #     function.  The default reference channel is the first channel in alphanumeric order.
-    #
-    #     This function returns a "matrix", which includes a "samples" array.  The array is a
-    #     2-dimensional NumPy array, with the axes being channels and samples.  Such an array
-    #     is optimized for viewer purposes.
-    #
-    #     The default filter setting is 'antialias' which is applied when downsampling occurs.
-    #
-    #     Parameters
-    #     ---------
-    #     start_index: int
-    #         start_index is inclusive.
-    #     end_index: int
-    #         end_index is exclusive, per python conventions.
-    #     sampling_frequency: float
-    #         desired sampling frequency of output matrix
-    #     sample_count: int
-    #         number of output samples
-    #
-    #     Returns
-    #     -------
-    #     matrix: dict
-    #         matrix data structure is the output of this function.  A reference to this data is
-    #         also stored in MedSession.matrix (class member variable).
-    #
-    #         Contents of matrix dict are:
-    #             start_time : int
-    #             start_time_string : str
-    #             end_time : int
-    #             end_time_string : str
-    #             channel_names : list of str
-    #             channel_sampling_frequencies : list of floats
-    #             contigua : list of contigua dicts (continuous data ranges)
-    #             records : list of record dicts
-    #             samples : 2D NumPy array
-    #             minima : Numpy array or None
-    #             maxima : Numpy array or None
-    #             sampling_frequency : float
-    #             sample_count : int
-    #             channel_count : int
-    #     """
-    #
-    #     self.matrix = get_raw_page(self.__sess_capsule, start_index, end_index, self.__major_dimension,
-    #         None, None, sample_count, sampling_frequency, self.__relative_indexing, self.__padding,
-    #         self.__filter_type, None, None, self.__detrend, self.__return_records,
-    #         self.__return_trace_ranges)
-    #
-    #     return self.matrix
-    #
         
     def sort_chans_by_acq_num(self):
         """
@@ -884,17 +805,7 @@ class MedSession:
         self.session_info = read_session_info(self.__sess_capsule)
         
         return
-        
 
-    # def __set_single_channel_active(self, chan_name, is_active):
-    #
-    #     set_single_channel_active(self.__sess_capsule, chan_name, is_active)
-    #
-    #     return
-        
-
-    # TODO: create function that frees inactive channels if cahing is on???
-    # TODO: deal with inactive reference channel problem
     def set_channel_active(self, chan_name, is_active=True):
         """
         Sets the specified channel (or list of channels) to be active (default) or inactive.
@@ -951,45 +862,7 @@ class MedSession:
         self.session_info = read_session_info(self.__sess_capsule)
         
         return
-        
-    # def set_filter(self, filter_type):
-    #     """
-    #     Sets the filter to be used by the "matrix" operations.
-    #
-    #     This filtering does not affect "read" operations, including read_by_index and read_by_time.
-    #     Filtering is done during get_matrix_by_index and get_matrix_by_time.
-    #
-    #     The default filter setting is 'antialias', which is the minimum filtering that should be
-    #     used when downsampling data.  In antialias mode, the antialias filter is only applied
-    #     when downsampling occurs.
-    #
-    #     Parameters
-    #     ---------
-    #     filter_type: str
-    #         'none', 'antialias' are accepted values.
-    #
-    #     Returns
-    #     -------
-    #     None
-    #     """
-    #
-    #     if not isinstance(filter_type, str):
-    #         raise MedSession.InvalidArgumentException("Argument must be one of these strings: 'none', 'antialias'")
-    #
-    #     filter_type_lower = filter_type.casefold()
-    #
-    #     if filter_type_lower in self.__valid_filters:
-    #         if filter_type_lower == 'none':
-    #             self.__filter_type = 'none'
-    #         elif filter_type_lower == 'antialias':
-    #             self.__filter_type = 'antialias'
-    #         else:
-    #             pass
-    #     else:
-    #         raise MedSession.InvalidArgumentException("Argument must be one of these strings: 'none', 'antialias'")
-    #
-    #     return
-    #
+
     def set_reference_channel(self, chan_name):
         """
         Sets the reference channel to be the string specified.
@@ -1038,103 +911,6 @@ class MedSession:
             name of the current reference channel.
         """
         return get_channel_reference()
-
-    #
-    #
-    # def set_trace_ranges(self, value):
-    #     """
-    #     Sets the boolean to control trace_ranges generated by the "matrix" operations.
-    #
-    #     Trace ranges do not affect "read" operations, including read_by_index and read_by_time.
-    #     Trace ranges can be calculated during get_matrix_by_index and get_matrix_by_time.
-    #
-    #     Since matrix operations can potentially downsample, trace ranges can be used to show
-    #     the max and min values actually present in the original signal.
-    #
-    #     The matrix keys "minima" and "maxima" contain the trace ranges.
-    #
-    #     Parameters
-    #     ---------
-    #     value: bool
-    #
-    #     Returns
-    #     -------
-    #     None
-    #     """
-    #     if type(value) != bool:
-    #         raise MedSession.InvalidArgumentException("Argument must be a boolean.")
-    #
-    #     self.__return_trace_ranges = value
-    #
-    #     return
-    #
-    # def set_detrend(self, value):
-    #     """
-    #     Sets the boolean to control detrend (baseline correction) generated by the "matrix" operations.
-    #
-    #     Detrend do not affect "read" operations, including read_by_index and read_by_time.
-    #     Detrend can be used calculated during get_matrix_by_index and get_matrix_by_time.
-    #
-    #     Parameters
-    #     ---------
-    #     value: bool
-    #
-    #     Returns
-    #     -------
-    #     None
-    #     """
-    #     if type(value) != bool:
-    #         raise MedSession.InvalidArgumentException("Argument must be a boolean.")
-    #
-    #     self.__detrend = value
-    #
-    #     return
-    #
-    # def set_major_dimension(self, major_dimension):
-    #     """
-    #     Sets the major dimension to be returned by future "matrix" operations.
-    #
-    #     The "samples" field of a matrix is a 2D NumPy array of 8 byte floating point values.
-    #     The parameter to this function, "channel" or "sample", determines which is the outer
-    #     array and which is the inner array.
-    #
-    #     Example: If you have 2 signal channels, and 3 samples per channel, then the "samples"
-    #     array of the matrix object would look like:
-    #
-    #         "channel": [[a, b, c], [x, y, z]]
-    #         "sample":  [[a, x], [b, y], [c, z]]
-    #
-    #     "channel" is the default value when a new session is created.
-    #
-    #     Note: this setting does not affect previously-generated matrices.  Previously
-    #     generated matrix arrays can be reversed using the standard NumPy transpose() function.
-    #
-    #     Parameters
-    #     ---------
-    #     major_dimension: str
-    #         'channel', 'sample' are accepted values.
-    #
-    #     Returns
-    #     -------
-    #     None
-    #     """
-    #
-    #     if not isinstance(major_dimension, str):
-    #         raise MedSession.InvalidArgumentException("Argument must be one of these strings: 'channel', 'sample'")
-    #
-    #     major_dimension_lower = major_dimension.casefold()
-    #
-    #     if major_dimension_lower in self.__valid_major_dimensions:
-    #         if major_dimension_lower == 'channel':
-    #             self.__major_dimension = 'channel'
-    #         elif major_dimension_lower == 'sample':
-    #             self.__major_dimension = 'sample'
-    #         else:
-    #             pass
-    #     else:
-    #         raise MedSession.InvalidArgumentException("Argument must be one of these strings: 'channel', 'sample'")
-    #
-    #     return
         
     def get_globals_number_of_session_samples(self):
         """
