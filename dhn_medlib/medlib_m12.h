@@ -269,6 +269,9 @@ typedef struct {
 	};
 } REC_Sgmt_v10_m12;
 
+// Description follows sampling_frequency / frame_rate in structure.
+// The description is an aribitrary length array of si1s padded to 16 byte alignment (total of structure + string).
+
 typedef struct {
 	si8     	end_time;
 	union {
@@ -279,14 +282,11 @@ typedef struct {
 		si8     end_sample_number;	// session-relative (global indexing) (SAMPLE_NUMBER_NO_ENTRY_m12 for variable frequency, session level entries)
 		si8     end_frame_number;	// session-relative (global indexing) (FRAME_NUMBER_NO_ENTRY_m12 for variable frequency, session level entries)
 	};
-	si4     	segment_number;
-	union {
-		ui1     pad[4];  // 16 byte alignment for encryption
-		si1	description[4];  // beginning of segment description, if present
-	};
+	si4     segment_number;
+	si4     acquisition_channel_number;  // REC_Sgmt_v11_ACQUISITION_CHANNEL_NUMBER_ALL_CHANNELS_m13 in session level records
 } REC_Sgmt_v11_m12;
 
-// Description follows sampling_frequency / frame_rate in structure.
+// Description follows acquisition_channel_number in structure.
 // The description is an aribitrary length array of si1s padded to 16 byte alignment (total of structure + string).
 
 
@@ -1014,7 +1014,7 @@ typedef struct {
 //         on read: set FPS pointer to section specified by time slice (decrpyting if necessary)
 // READ_FULL == on open: read full file (no memory mapping required, & closing)
 // MMAP == allocate memory for full file, but only read on demand, (no re-reading occurs, but potentially memory expensive, good paired with VDS)
-// ACTIVE ==  applies only to channels. Mark a CHANNEL as active to return data. Marking a channel as inactive does not free or close it.
+// ACTIVE == applies only to channels. Mark a CHANNEL as active to return data. Marking a channel as inactive does not free or close it.
 // EPHEMERAL DATA == if GENERATE_EPHEMERAL_DATA_m12 is set, ephemeral data is created if it does not exist.
 //	If UPDATE_EPHEMERAL_DATA is set, the data is updated whenever the channel or segment open set changes (opening of new elements, not the active status)
 //	The UPDATE_EPHEMERAL_DATA bit is set by the lower levels and reset by the higher level once the data has been updated.
@@ -1029,11 +1029,10 @@ typedef struct {
 #define LH_UPDATE_EPHEMERAL_DATA_m12			((ui8) 1 << 2)	// signal to higher level from lower level (reset by higher level after update)
 
 // session level
-#define LH_SESSION_OPEN_m12				((ui8) 1 << 7)
-#define LH_INCLUDE_TIME_SERIES_CHANNELS_m12		((ui8) 1 << 8)
-#define LH_INCLUDE_VIDEO_CHANNELS_m12			((ui8) 1 << 9)
-#define LH_MAP_ALL_TIME_SERIES_CHANNELS_m12		((ui8) 1 << 12)
-#define LH_MAP_ALL_VIDEO_CHANNELS_m12			((ui8) 1 << 13)
+#define LH_EXCLUDE_TIME_SERIES_CHANNELS_m12		((ui8) 1 << 10)  // useful when session directory passed, but don't want time series channels
+#define LH_EXCLUDE_VIDEO_CHANNELS_m12			((ui8) 1 << 11)  // useful when session directory passed, but don't want video channels
+#define LH_MAP_ALL_TIME_SERIES_CHANNELS_m12		((ui8) 1 << 12)  // useful when time series channels may be added to open session
+#define LH_MAP_ALL_VIDEO_CHANNELS_m12			((ui8) 1 << 13)  // useful when video channels may be added to open session
 
 #define LH_READ_SLICE_SESSION_RECORDS_m12		((ui8) 1 << 16)	// read full indices file (close file); open data, read universal header, leave open
 #define LH_READ_FULL_SESSION_RECORDS_m12		((ui8) 1 << 17)	// read full indices file & data files, close all files
@@ -1045,7 +1044,8 @@ typedef struct {
 
 // channel level
 #define LH_CHANNEL_ACTIVE_m12				((ui8) 1 << 32)
-#define LH_MAP_ALL_SEGMENTS_m12				((ui8) 1 << 33)
+#define LH_REFERENCE_INACTIVE_m12			((ui8) 1 << 33)
+#define LH_MAP_ALL_SEGMENTS_m12				((ui8) 1 << 34)
 // (active channels only)
 #define LH_READ_SLICE_CHANNEL_RECORDS_m12		((ui8) 1 << 40)	// read full indices file (close file); open data, read universal header, leave open
 #define LH_READ_FULL_CHANNEL_RECORDS_m12		((ui8) 1 << 41)	// read full indices file & data files, close all files
@@ -1335,6 +1335,7 @@ void		NET_trim_address_m12(si1 *addr_str);
 //**********************************  MED Macros  **********************************//
 //**********************************************************************************//
 
+#define PLURAL_m12(x) 			( ((x) == 1) ? "" : "s" )
 #define ABS_m12(x)			( ((x) >= 0) ? (x) : -(x) )	// do not increment/decrement in call to ABS (as x occurs thrice)
 #define HEX_STRING_BYTES_m12(x)         ( ((x) + 1) * 3 )
 #define REMOVE_DISCONTINUITY_m12(x)     ( ((x) >= 0) ? (x) : -(x) )	// do not increment/decrement in call to REMOVE_DISCONTINUITY (as x occurs thrice)
@@ -2377,6 +2378,7 @@ void            G_show_timezone_info_m12(TIMEZONE_INFO_m12 *timezone_entry, TERN
 void            G_show_universal_header_m12(FILE_PROCESSING_STRUCT_m12 *fps, UNIVERSAL_HEADER_m12 *uh);
 TERN_m12	G_sort_channels_by_acq_num_m12(SESSION_m12 *sess);
 void		G_sort_records_m12(LEVEL_HEADER_m12 *level_header, si4 segment_number);
+TERN_m12	G_ternary_entry_m12(si1 *entry);
 void		G_textbelt_text_m12(si1 *phone_number, si1 *content, si1 *textbelt_key);
 si1		*G_unique_temp_file_m12(si1 *temp_file);
 void		G_update_maximum_entry_size_m12(FILE_PROCESSING_STRUCT_m12 *fps, si8 number_of_items, si8 bytes_to_write, si8 file_offset);
@@ -2500,7 +2502,7 @@ ui4             STR_check_spaces_m12(si1 *string);
 si4		STR_compare_m12(const void *a, const void *b);
 TERN_m12    	STR_contains_formatting_m12(si1 *string, si1 *plain_string);
 TERN_m12	STR_contains_regex_m12(si1 *string);
-si1		*STR_duration_string_m12(si1 *dur_str, si8 i_usecs);
+si1		*STR_duration_string_m12(si1 *dur_str, si8 int_usecs, TERN_m12 abbreviated, TERN_m12 two_level);
 void            STR_escape_chars_m12(si1 *string, si1 target_char, si8 buffer_len);
 si1		*STR_generate_hex_string_m12(ui1 *bytes, si4 num_bytes, si1 *string);
 si1		*STR_match_end_m12(si1 *pattern, si1 *buffer);
@@ -2511,7 +2513,7 @@ si1		*STR_match_start_m12(si1 *pattern, si1 *buffer);
 si1     	*STR_re_escape_m12(si1 *str, si1 *esc_str);
 void    	STR_replace_char_m12(si1 c, si1 new_c, si1 *buffer);
 si1		*STR_replace_pattern_m12(si1 *pattern, si1 *new_pattern, si1 *buffer, TERN_m12 free_input_buffer);
-si1		*STR_size_string_m12(si1 *size_str, si8 n_bytes);
+si1		*STR_size_string_m12(si1 *size_str, si8 n_bytes, TERN_m12 base_2);
 void		STR_sort_m12(si1 **string_array, si8 n_strings);
 void		STR_strip_character_m12(si1 *s, si1 character);
 const si1	*STR_tern_m12(TERN_m12 val);
@@ -3147,6 +3149,7 @@ void    	CMP_find_crits_2_m12(sf8 *data, si8 data_len, si8 *n_peaks, si8 *peak_x
 void    	CMP_find_extrema_m12(si4 *input_buffer, si8 len, si4 *min, si4 *max, CMP_PROCESSING_STRUCT_m12 *cps);
 TERN_m12	CMP_find_frequency_scale_m12(CMP_PROCESSING_STRUCT_m12 *cps, void (*compression_f)(CMP_PROCESSING_STRUCT_m12 *cps));
 void    	CMP_free_buffers_m12(CMP_BUFFERS_m12 *buffers, TERN_m12 free_structure);
+TERN_m12    	CMP_free_cache_m12(CMP_PROCESSING_STRUCT_m12 *cps);
 void    	CMP_free_processing_struct_m12(CMP_PROCESSING_STRUCT_m12 *cps, TERN_m12 free_cps_structure);
 void    	CMP_generate_lossy_data_m12(CMP_PROCESSING_STRUCT_m12 *cps, si4* input_buffer, si4 *output_buffer, ui1 mode);
 void		CMP_generate_parameter_map_m12(CMP_PROCESSING_STRUCT_m12 *cps);
@@ -3192,7 +3195,7 @@ si4     	CMP_round_si4_m12(sf8 val);
 void    	CMP_scale_amplitude_si4_m12(si4 *input_buffer, si4 *output_buffer, si8 len, sf8 scale_factor, CMP_PROCESSING_STRUCT_m12 *cps);
 void    	CMP_scale_frequency_si4_m12(si4 *input_buffer, si4 *output_buffer, si8 len, sf8 scale_factor, CMP_PROCESSING_STRUCT_m12 *cps);
 void    	CMP_set_variable_region_m12(CMP_PROCESSING_STRUCT_m12 *cps);
-void      	CMP_sf8_to_si4_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len);
+void      	CMP_sf8_to_si4_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, TERN_m12 round);
 void      	CMP_sf8_to_si4_and_scale_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, sf8 scale);
 void    	CMP_show_block_header_m12(CMP_BLOCK_FIXED_HEADER_m12 *block_header);
 void    	CMP_show_block_model_m12(CMP_PROCESSING_STRUCT_m12 *cps, TERN_m12 recursed_call);
@@ -3608,7 +3611,7 @@ FILT_PROCESSING_STRUCT_m12  *FILT_initialize_processing_struct_m12(si4 order, si
 void    FILT_generate_initial_conditions_m12(FILT_PROCESSING_STRUCT_m12 *filtps);
 void    FILT_hqr_m12(sf8 **a, si4 poles, FILT_COMPLEX_m12 *eigs);
 void    FILT_invert_matrix_m12(sf8 **a, sf8 **inv_a, si4 order);
-ui1	FILT_line_noise_filter_m12(sf8 *y, sf8 *fy, si8 len, sf8 samp_freq, sf8 line_freq, si8 cycles_per_template, TERN_m12 calculate_score, TERN_m12 fast_mode, CMP_BUFFERS_m12 *lnf_buffers);
+sf8	FILT_line_noise_filter_m12(sf8 *y, sf8 *fy, si8 len, sf8 samp_freq, sf8 line_freq, si8 cycles_per_template, TERN_m12 calculate_score, TERN_m12 fast_mode, CMP_BUFFERS_m12 *lnf_buffers);
 void    FILT_mat_mult_m12(void *a, void *b, void *product, si4 outer_dim1, si4 inner_dim, si4 outer_dim2);
 sf8	*FILT_moving_average_m12(sf8 *x, sf8 *ax, si8 len, si8 span, si1 tail_option_code);
 sf8    	*FILT_noise_floor_filter_m12(sf8 *data, sf8 *filt_data, si8 data_len, sf8 rel_thresh, sf8 abs_thresh, CMP_BUFFERS_m12 *nff_buffers);
@@ -3707,7 +3710,7 @@ void    FILT_unsymmeig_m12(sf8 **a, si4 poles, FILT_COMPLEX_m12 *eigs);
 #define DM_INTRP_BINTRP_MASK_d1		      ( DM_INTRP_BINTRP_MDPT_m12 | DM_INTRP_BINTRP_MEAN_m12 | DM_INTRP_BINTRP_MEDN_m12 | DM_INTRP_BINTRP_FAST_m12 )
 #define DM_INTRP_MASK_m12	              (	DM_INTRP_LINEAR_m12 | DM_INTRP_MAKIMA_m12 | DM_INTRP_SPLINE_m12 | DM_INTRP_UP_MAKIMA_DN_LINEAR_m12 | DM_INTRP_UP_SPLINE_DN_LINEAR_m12 | DM_INTRP_BINTRP_MASK_d1 )
 #define DM_TRACE_RANGES_m12			((ui8) 1 << 40)		// return bin minima & maxima (equal in size, type, & format to data matrix)
-#define DM_TRACE_EXTREMA_m12			((ui8) 1 << 41)		// return minima & maxima values also (minimum & maximum per channel, same type as data matrix)
+#define DM_TRACE_EXTREMA_m12			((ui8) 1 << 41)		// return minima & maxima values in put traces as two arrays (minimum & maximum per channel, same type as data matrix)
 #define DM_DETREND_m12				((ui8) 1 << 42)		// detrend traces (and trace range matrices if DM_TRACE_RANGES_m12 is set)
 #define DM_DSCNT_CONTIG_m12			((ui8) 1 << 48)		// return contiguons
 #define DM_DSCNT_NAN_m12			((ui8) 1 << 49)		// fill absent samples with NaNs (locations specified in returned arrays)
@@ -3880,11 +3883,11 @@ void			DM_transpose_out_of_place_m12(DATA_MATRIX_m12 *in_matrix, DATA_MATRIX_m12
 #define TR_OFFSET_OFFSET_m12				24				// ui8
 
 // Transmission Info Modes  [set by TR_send_transmission_m12() & TR_recv_transmission_m12(), used by TR_close_transmission_m12()]
-// indicages whether last transmission was a send or receive
+// indicates whether last transmission was a send or receive
 #define TR_MODE_NONE_m12		0
 #define TR_MODE_SEND_m12		1
 #define TR_MODE_RECV_m12		2
-#define TR_MODE_FORCE_CLOSE_m12		3
+#define TR_MODE_FORCE_CLOSE_m12		3  // set to force close a (TCP) socket
 
 // Miscellaneous
 #define TR_INET_MSS_BYTES_m12				1376  // highest multiple of 16, that stays below internet standard frame size (1500) minus [32 (TR header) + 40 (TCP/IP header)
@@ -3907,13 +3910,18 @@ typedef struct {
 		struct {
 			si1     ID_string[TYPE_BYTES_m12];  // transmission ID is typically application specific
 			ui1     type;  // transmission type (general [0-63] or transmission ID specific [64-255])
-			ui1	subtype;  // rarely used (2nd confirmation in keep alive messages)
-			ui1     version;  // transmission header version (also 3rd confirmation in keep alive messages)
+			ui1	subtype;  // rarely used
+			ui1     version;  // transmission header version
 		};
 		struct {
 			ui4     ID_code;  // transmission ID is typically application specific
-			si1	ID_string_terminal_zero;  // here for clarity
-			ui1	pad_bytes[3];  // not available for use (type, type_2, & version above)
+			union {
+				ui4	combined_check;  // use to to check [zero, type, subtype, version] as a ui4
+				struct {
+					si1	ID_string_terminal_zero;  // here for clarity
+					ui1	pad_bytes[3];  // not available for use (type, type_2, & version above)
+				};
+			};
 		};
 	};
 	si8	transmission_bytes;  // full size of tramsmitted data in bytes (*** does not include header ***)
