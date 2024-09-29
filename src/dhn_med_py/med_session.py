@@ -863,7 +863,8 @@ class MedSession:
         
         return
 
-    def set_reference_channel(self, chan_name):
+    @property
+    def reference_channel(self):
         """
         Sets the reference channel to be the string specified.
 
@@ -876,24 +877,14 @@ class MedSession:
 
         Reference channels are not used when using timestamps to specify start/end ranges for data
         reading.
-
-        Parameters
-        ---------
-        chan_name: str
-
-        Returns
-        -------
-        None
         """
 
-        if not isinstance(chan_name, str):
-            raise MedSession.InvalidArgumentException("Argument must be a string.")
+        return get_channel_reference()
 
-        set_channel_reference(self.__sess_capsule, chan_name)
-
-    def get_reference_channel(self):
+    @reference_channel.setter
+    def reference_channel(self, chan_name):
         """
-        Returns the name of the current reference channel.
+        Sets the reference channel to be the string specified.
 
         In general, reference values are used when reading across many channels, but the channels
         have different sampling frequencies.
@@ -904,13 +895,12 @@ class MedSession:
 
         Reference channels are not used when using timestamps to specify start/end ranges for data
         reading.
-
-        Returns
-        -------
-        str
-            name of the current reference channel.
         """
-        return get_channel_reference()
+
+        if not isinstance(chan_name, str):
+            raise MedSession.InvalidArgumentException("Argument must be a string.")
+
+        set_channel_reference(self.__sess_capsule, chan_name)
         
     def get_globals_number_of_session_samples(self):
         """
