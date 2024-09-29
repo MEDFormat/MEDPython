@@ -22,14 +22,19 @@
 
 # Local imports
 from .medlib_flags import FLAGS
-from .med_file.dhnmed_file import (initialize_session, open_MED,
-                                   read_MED,
-                                   read_session_info,
-                                   sort_channels_by_acq_num,
-                                   set_channel_reference, get_channel_reference,
-                                   get_globals_number_of_session_samples, find_discontinuities, get_session_records,
-                                   read_lh_flags, push_lh_flags,
-                                   initialize_data_matrix, read_dm_flags, push_dm_flags, get_dm)
+from .med_file.dhnmed_file import (
+    initialize_session, initialize_data_matrix,
+    set_session_capsule_destructor, set_data_matrix_capsule_destructor,
+    remove_capsule_destructor,
+    open_MED, read_MED,
+    read_session_info,
+    sort_channels_by_acq_num,
+    set_channel_reference, get_channel_reference,
+    get_globals_number_of_session_samples, find_discontinuities, get_session_records,
+    read_lh_flags, push_lh_flags,
+    read_dm_flags, push_dm_flags, get_dm
+)
+
 
 class MedDataMatrix:
     """
@@ -448,6 +453,9 @@ class MedDataMatrix:
         return self.matrix
 
     def close(self):
+
+        set_data_matrix_capsule_destructor(self.__dm_capsule)
+
         if self.__dm_capsule is not None:
             self.__dm_capsule = None
 
@@ -505,7 +513,7 @@ class MedSession:
     
     __sess_capsule = None
 
-
+    data_matrix = None
 
 
 
@@ -777,15 +785,6 @@ class MedSession:
 
         return self.data
         
-    def close(self):
-
-        self.data_matrix.close()
-
-        if self.__sess_capsule is not None:
-            self.__sess_capsule = None
-
-        return
-        
     def sort_chans_by_acq_num(self):
         """
         Re-orders channels by acquisition_channel_number, lowest to highest.
@@ -1003,8 +1002,29 @@ class MedSession:
         if type(value) != bool:
             raise MedSession.InvalidArgumentException("Argument must be a boolean.")
 
+        if value is True:
+            set_session_capsule_destructor(self.__sess_capsule)
+            dm = self.data_matrix
+            set_data_matrix_capsule_destructor(dm.__dm_capsule)
+        else:
+            remove_capsule_destructor(self.__sess_capsule)
+            dm = self.data_matrix
+            remove_capsule_destructor(dm.__dm_capsule)
+
         self.__close_on_destruct = value
-        
+
+    def close(self):
+
+        if self.data_matrix is not None:
+            self.data_matrix.close()
+
+        set_session_capsule_destructor(self.__sess_capsule)
+
+        if self.__sess_capsule is not None:
+            self.__sess_capsule = None
+
+        return
+
     def __del__(self):
     
         if self.__sess_capsule is not None and self.__close_on_destruct is True:

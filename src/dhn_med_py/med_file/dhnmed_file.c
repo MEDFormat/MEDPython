@@ -80,6 +80,89 @@ si8 *change_pointer(SESSION_m12 *sess, GLOBALS_m12 *globals_m12)
     
 }
 
+void dm_capsule_destructor(PyObject *capsule) {
+    void *dm = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
+    if (dm != NULL) {
+        DM_free_matrix_m12(dm, TRUE_m12);
+    }
+}
+
+void session_capsule_destructor (PyObject *capsule){
+    PyCapsule_SetDestructor(capsule, NULL);
+    void *sess = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
+    if (sess != NULL) {
+        G_free_session_m12(sess, TRUE_m12);
+    }
+}
+
+PyObject    *set_session_capsule_destructor (PyObject *self, PyObject *args){
+
+    PyObject                *sess_capsule_object;
+
+    // --- Parse the input ---
+    if (!PyArg_ParseTuple(args,"O",
+                          &sess_capsule_object)){
+
+        PyErr_SetString(PyExc_RuntimeError, "Session capsule required\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    PyCapsule_SetDestructor(sess_capsule_object, session_capsule_destructor);
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+PyObject    *set_data_matrix_capsule_destructor (PyObject *self, PyObject *args){
+
+    PyObject                *dm_capsule_object;
+
+    // --- Parse the input ---
+    if (!PyArg_ParseTuple(args,"O",
+                          &dm_capsule_object)){
+
+        PyErr_SetString(PyExc_RuntimeError, "Data matrix capsule required\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    PyCapsule_SetDestructor(dm_capsule_object, dm_capsule_destructor);
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+PyObject    *remove_capsule_destructor (PyObject *self, PyObject *args){
+
+
+    PyObject                *capsule_object;
+
+    // --- Parse the input ---
+    if (!PyArg_ParseTuple(args,"O",
+                          &capsule_object)){
+
+        PyErr_SetString(PyExc_RuntimeError, "Capsule object required\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    PyCapsule_SetDestructor(capsule_object, NULL);
+
+    Py_INCREF(Py_None);
+    return Py_None;
+}
+
+
+PyObject            *initialize_data_matrix(PyObject *self, PyObject *args)
+{
+    DATA_MATRIX_m12         *dm;
+
+    dm = (DATA_MATRIX_m12 *) calloc_m12((size_t) 1, sizeof(DATA_MATRIX_m12), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
+    return PyCapsule_New((void *) dm, "dm", dm_capsule_destructor);
+
+}
+
 PyObject            *initialize_session(PyObject *self, PyObject *args)
 {
     SESSION_m12         *sess;
@@ -1751,29 +1834,6 @@ si4     rec_compare(const void *a, const void *b)
     return(-1);
 }
 
-void dm_capsule_destructor(PyObject *capsule) {
-    void *dm = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
-    if (dm != NULL) {
-        DM_free_matrix_m12(dm, TRUE_m12);
-    }
-}
-
-void session_capsule_destructor (PyObject *capsule){
-    void *sess = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
-    if (sess != NULL) {
-        G_free_session_m12(sess, TRUE_m12);
-
-    }}
-
-
-PyObject            *initialize_data_matrix(PyObject *self, PyObject *args)
-{
-    DATA_MATRIX_m12         *dm;
-
-    dm = (DATA_MATRIX_m12 *) calloc_m12((size_t) 1, sizeof(DATA_MATRIX_m12), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
-    return PyCapsule_New((void *) dm, "dm", dm_capsule_destructor);
-
-}
 
 PyObject            *get_dm(PyObject *self, PyObject *args)
 {

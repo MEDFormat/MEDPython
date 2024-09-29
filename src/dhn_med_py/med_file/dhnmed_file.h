@@ -65,8 +65,15 @@ static char read_MED_docstring[] =
 
 
 static PyObject *test_api(PyObject *self, PyObject *args);
+
 void session_capsule_destructor(PyObject *capsule);
+void dm_capsule_destructor(PyObject *capsule);
 static PyObject *initialize_session(PyObject *self, PyObject *args);
+static PyObject *initialize_data_matrix(PyObject *self, PyObject *args);
+static PyObject *set_session_capsule_destructor (PyObject *self, PyObject *args);
+static PyObject *set_data_matrix_capsule_destructor (PyObject *self, PyObject *args);
+static PyObject *remove_capsule_destructor (PyObject *self, PyObject *args);
+
 static PyObject *read_MED(PyObject *self, PyObject *args);
 static PyObject *open_MED(PyObject *self, PyObject *args);
 static PyObject *read_session_info(PyObject *self, PyObject *args);
@@ -80,8 +87,8 @@ static PyObject *set_channel_reference(PyObject *self, PyObject *args);
 static PyObject *get_globals_number_of_session_samples(PyObject *self, PyObject *args);
 static PyObject *find_discontinuities(PyObject *self, PyObject *args);
 static PyObject *get_session_records(PyObject *self, PyObject *args);
-void dm_capsule_destructor(PyObject *capsule);
-static PyObject *initialize_data_matrix(PyObject *self, PyObject *args);
+
+
 static PyObject *read_dm_flags(PyObject *self, PyObject *args);
 static PyObject *push_dm_flags(PyObject *self, PyObject *args);
 static PyObject *get_dm(PyObject *self, PyObject *args);
@@ -91,6 +98,10 @@ static PyObject *get_dm(PyObject *self, PyObject *args);
 static PyMethodDef module_methods[] = {
     {"test_api", test_api, METH_VARARGS, test_api_docstring},
     {"initialize_session", initialize_session, METH_VARARGS, read_MED_docstring},
+    {"initialize_data_matrix", initialize_data_matrix, METH_VARARGS, read_MED_docstring},
+    {"set_session_capsule_destructor", set_session_capsule_destructor, METH_VARARGS, read_MED_docstring},
+    {"set_data_matrix_capsule_destructor", set_data_matrix_capsule_destructor, METH_VARARGS, read_MED_docstring},
+    {"remove_capsule_destructor", remove_capsule_destructor, METH_VARARGS, read_MED_docstring},
     {"read_MED", read_MED, METH_VARARGS, read_MED_docstring},
     {"open_MED", open_MED, METH_VARARGS, read_MED_docstring},
     {"read_session_info", read_session_info, METH_VARARGS, read_MED_docstring},
@@ -104,7 +115,6 @@ static PyMethodDef module_methods[] = {
     {"get_globals_number_of_session_samples", get_globals_number_of_session_samples, METH_VARARGS, read_MED_docstring},
     {"find_discontinuities", find_discontinuities, METH_VARARGS, read_MED_docstring},
     {"get_session_records", get_session_records, METH_VARARGS, read_MED_docstring},
-    {"initialize_data_matrix", initialize_data_matrix, METH_VARARGS, read_MED_docstring},
     {"read_dm_flags", read_dm_flags, METH_VARARGS, read_MED_docstring},
     {"push_dm_flags", push_dm_flags, METH_VARARGS, read_MED_docstring},
     {"get_dm", get_dm, METH_VARARGS, read_MED_docstring},
