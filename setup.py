@@ -23,14 +23,27 @@
 # !/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import json
+import sys
 from setuptools import Extension, setup
 import numpy
+
+# Detect operating system
+os = sys.platform
+if os == 'linux':
+    target = "LINUX_m12"
+elif os == 'darwin':
+    target = "MAC_m12"
+elif os == 'win32':
+    target = "WIN_m12"
+else:
+    target = "UNKNOWN"
 
 FILE_EXT = Extension("dhn_med_py.med_file.dhnmed_file",
              ["src/dhn_med_py/med_file/dhnmed_file.c"],
                      include_dirs=["dhn_medlib"],
-                     extra_compile_args=['-fms-extensions', '-w', '-O0'])
+                     extra_compile_args=['-fms-extensions',
+                                         '-D'+target,
+                                         '-w', '-O0'])
 
 setup(name="dhn_med_py",
       zip_safe=False,
