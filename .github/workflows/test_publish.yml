@@ -11,7 +11,7 @@ jobs:
       matrix:
 #        os: [ubuntu-20.04, ubuntu-22.04, macos-12, macos-13, macos-14, windows-latest]
 #        python-version: ["3.9", "3.10", "3.11", "3.12"]
-        os: [ubuntu-22.04]
+        os: [ubuntu-22.04, windows-latest]
         python-version: ["3.9"]
 
     steps:
