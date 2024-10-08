@@ -467,15 +467,15 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
     }
 
     //show_time_slice_m12(&sess->time_slice);
-    
-    //show_Sgmt_records_array_m12(sess);
+
+//    G_show_Sgmt_records_array_m12(sess);
     n_contigua = G_build_contigua_m12((LEVEL_HEADER_m12 *) sess);
     //printf("n_contigs = %d\n", n_contigs);
     
     //     ******************************************
     //     ********  Create Python structure  *******
     //     ******************************************
-    
+
     py_info = Py_None;
     py_metadata = Py_None;
     py_channels = Py_None;
@@ -489,7 +489,7 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
         if (chan->flags & LH_CHANNEL_ACTIVE_m12)
             ++n_active_chans;
     }
-    
+
     py_contigua = PyList_New(n_contigua);
     sess_tmd2 = &sess->time_series_metadata_fps->metadata->time_series_section_2;
     for (i=0; i<n_contigua; ++i) {
@@ -511,7 +511,7 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
         //printf("Got here 2a\n");
         PyList_SetItem(py_contigua, i, py_contiguon);
     }
-    
+
 
     // Create channel sub-structures
     py_channels = PyList_New(n_active_chans);
@@ -2171,8 +2171,9 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
     PyObject                *py_session_dict;
     PyObject                *py_channels_dict, *py_channel_dict;
     PyObject                *py_segments_dict, *py_segment_dict;
-    si8                     i, j;
-    si4                     n_channels, n_segs;
+    PyObject                *py_flags_list, *bit_list, *bit_value;
+    si8                     i, j, m;
+    si4                     bit, n_bits, n_channels, n_segs;
     ui8                     flags;
 
     // --- Parse the input ---
@@ -2191,8 +2192,15 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
 
     // Create session dict and set session level flags
     flags = sess->header.flags;
-    py_session_dict = Py_BuildValue("{s:K}",
-                                    "session_flags", flags);
+    n_bits = sizeof(ui8) * 8;
+    bit_list = PyList_New(n_bits);
+    for (m=0; m<n_bits; ++m) {
+        bit = (flags >> m) & 1;  // Extract the i-th bit
+        bit_value = PyLong_FromLong(bit);
+        PyList_SetItem(bit_list, m, bit_value);
+    }
+    py_session_dict = Py_BuildValue("{s:O}",
+                                    "session_flags", bit_list);
 
     n_channels = sess->number_of_time_series_channels;
 
@@ -2209,16 +2217,31 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
         }
 
         // Create channel dict and set channel level flags
-        py_channel_dict = Py_BuildValue("{s:K}",
-                                        "channel_flags", flags);
+        n_bits = sizeof(ui8) * 8;
+        bit_list = PyList_New(n_bits);
+        for (m=0; m<n_bits; ++m) {
+            bit = (flags >> m) & 1;  // Extract the i-th bit
+            bit_value = PyLong_FromLong(bit);
+            PyList_SetItem(bit_list, m, bit_value);
+        }
+        py_channel_dict = Py_BuildValue("{s:O}",
+                                        "channel_flags", bit_list);
 
         py_segments_dict = PyDict_New();
         for (j=0; j<n_segs; ++j) {
             seg = chan->segments[j];
             flags = seg->header.flags;
             // Create segment dict and set segment level flags
-            py_segment_dict = Py_BuildValue("{s:K}",
-                                            "segment_flags", flags);
+            n_bits = sizeof(ui8) * 8;
+            bit_list = PyList_New(n_bits);
+            for (m=0; m<n_bits; ++m) {
+                bit = (flags >> m) & 1;  // Extract the i-th bit
+                bit_value = PyLong_FromLong(bit);
+                PyList_SetItem(bit_list, m, bit_value);
+            }
+            py_segment_dict = Py_BuildValue("{s:O}",
+                                            "segment_flags", bit_list);
+
 
             // Set one segment to segments dict
             PyDict_SetItemString(py_segments_dict, seg->name, py_segment_dict);
@@ -2245,12 +2268,12 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
     SEGMENT_m12             *seg;
     TIME_SLICE_m12          *slice;
     PyObject                *sess_capsule_object;
-    PyObject                *value;
     PyObject                *py_channels_dict, *py_channel_dict;
     PyObject                *py_segments_dict, *py_segment_dict;
-    PyObject                *flags_dict;
-    si8                     i, j;
-    si4                     n_channels, n_segs;
+    PyObject                *flags_dict, *bit_list, *bit_value;
+    ui8                     flags;
+    si8                     i, j, m;
+    si4                     bit, n_bits, n_segs;
 
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"OO",
@@ -2266,16 +2289,35 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
     sess = PyCapsule_GetPointer(sess_capsule_object, "session");
 
     // Set session level flags
-    value = PyDict_GetItemString(flags_dict, "session_flags");
-    if (value == NULL){
+    bit_list = PyDict_GetItemString(flags_dict, "session_flags");
+    if (bit_list == NULL){
         PyErr_SetString(PyExc_RuntimeError, "Key session_flags not found in flags dictionary\n");
         PyErr_Occurred();
         return NULL;
     }
 
-    sess->header.flags = PyLong_AsLong(value);
+    n_bits = sizeof(ui8) * 8;
 
-    n_channels = sess->number_of_time_series_channels;
+    flags = 0;
+    for (m = 0; m < n_bits; m++) {
+        bit_value = PyList_GetItem(bit_list, m);  // Get the i-th item
+        if (!PyLong_Check(bit_value)) {
+            PyErr_SetString(PyExc_TypeError, "List items must be integers.");
+            return NULL;
+        }
+        bit = PyLong_AsLong(bit_value);  // Convert Python integer to C long
+
+        // Validate bit value (must be either 0 or 1)
+        if (bit < 0 || bit > 1) {
+            PyErr_SetString(PyExc_ValueError, "Bits must be 0 or 1.");
+            return NULL;
+        }
+        if (bit == 1) {
+            flags |= (1UL << m); // Set the bit at the correct position
+        }
+    }
+
+    sess->header.flags = flags;
 
     // Check if channels are in session dictionary
     py_channels_dict = PyDict_GetItemString(flags_dict, "channels");
@@ -2294,11 +2336,30 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
         }
 
         // Set channel flags if they are present
-        value = PyDict_GetItemString(py_channel_dict, "channel_flags");
-        if (value == NULL){
+        bit_list = PyDict_GetItemString(py_channel_dict, "channel_flags");
+        if (bit_list == NULL){
             continue;
         }else{
-            chan->header.flags = PyLong_AsLong(value);
+            flags = 0;
+            for (m = 0; m < n_bits; m++) {
+                PyObject* bit_value = PyList_GetItem(bit_list, m);  // Get the i-th item
+                if (!PyLong_Check(bit_value)) {
+                    PyErr_SetString(PyExc_TypeError, "List items must be integers.");
+                    return NULL;
+                }
+
+                bit = PyLong_AsLong(bit_value);  // Convert Python integer to C long
+
+                // Validate bit value (must be either 0 or 1)
+                if (bit < 0 || bit > 1) {
+                    PyErr_SetString(PyExc_ValueError, "Bits must be 0 or 1.");
+                    return NULL;
+                }
+                if (bit == 1) {
+                    flags |= (1UL << m); // Set the bit at the correct position
+                }
+            }
+            chan->header.flags = flags;
         }
 
         // Check if segments are in the channel dictionary
@@ -2323,11 +2384,30 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
             }
 
             // Set segment flags if they are present
-            value = PyDict_GetItemString(py_channel_dict, "segment_flags");
-            if (value == NULL){
+            bit_list = PyDict_GetItemString(py_channel_dict, "segment_flags");
+            if (bit_list == NULL){
                 continue;
             }else{
-                seg->header.flags = PyLong_AsLong(value);
+                flags=0;
+                for (m = 0; m < n_bits; m++) {
+                    PyObject* bit_value = PyList_GetItem(bit_list, m);  // Get the i-th item
+                    if (!PyLong_Check(bit_value)) {
+                        PyErr_SetString(PyExc_TypeError, "List items must be integers.");
+                        return NULL;
+                    }
+
+                    bit = PyLong_AsLong(bit_value);  // Convert Python integer to C long
+
+                    // Validate bit value (must be either 0 or 1)
+                    if (bit < 0 || bit > 1) {
+                        PyErr_SetString(PyExc_ValueError, "Bits must be 0 or 1.");
+                        return NULL;
+                    }
+                    if (bit == 1) {
+                        flags |= (1UL << m); // Set the bit at the correct position
+                    }
+                }
+                seg->header.flags = flags;
             }
         }
     }
@@ -2340,6 +2420,8 @@ PyObject *read_dm_flags(PyObject *self, PyObject *args)
     DATA_MATRIX_m12         *dm;
     PyObject                *dm_capsule_obj;
     PyObject                *py_dm_dict;
+    PyObject                *bit_value, *bit_list;
+    si4                     m, bit, n_bits;
     ui8                     flags;
 
 
@@ -2359,8 +2441,16 @@ PyObject *read_dm_flags(PyObject *self, PyObject *args)
 
     // Create session dict and set session level flags
     flags = dm->flags;
-    py_dm_dict = Py_BuildValue("{s:K}",
-                               "data_matrix_flags", flags);
+    n_bits = sizeof(ui8) * 8;
+    bit_list = PyList_New(n_bits);
+    for (m=0; m<n_bits; ++m) {
+        bit = (flags >> m) & 1;  // Extract the i-th bit
+        bit_value = PyLong_FromLong(bit);
+        PyList_SetItem(bit_list, m, bit_value);
+    }
+
+    py_dm_dict = Py_BuildValue("{s:O}",
+                               "data_matrix_flags", bit_list);
 
     return py_dm_dict;
 }
@@ -2369,8 +2459,10 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
 {
     DATA_MATRIX_m12         *dm;
     PyObject                *dm_capsule_obj;
-    PyObject                *value;
+    PyObject                *bit_list, *bit_value;
     PyObject                *flags_dict;
+    ui8                     flags;
+    si4                     m, bit, n_bits;
 
     // --- Parse the input ---
     if (!PyArg_ParseTuple(args,"OO",
@@ -2386,14 +2478,35 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
     dm = (DATA_MATRIX_m12 *) PyCapsule_GetPointer(dm_capsule_obj, "dm");
 
     // Set session level flags
-    value = PyDict_GetItemString(flags_dict, "data_matrix_flags");
-    if (value == NULL){
+    bit_list = PyDict_GetItemString(flags_dict, "data_matrix_flags");
+    if (bit_list == NULL){
         PyErr_SetString(PyExc_RuntimeError, "Key data_matrix_flags not found in flags dictionary\n");
         PyErr_Occurred();
         return NULL;
     }
 
-    dm->flags = PyLong_AsLong(value);
+    n_bits = sizeof(ui8) * 8;
+
+    flags = 0;
+    for (m = 0; m < n_bits; m++) {
+        bit_value = PyList_GetItem(bit_list, m);  // Get the i-th item
+        if (!PyLong_Check(bit_value)) {
+            PyErr_SetString(PyExc_TypeError, "List items must be integers.");
+            return NULL;
+        }
+        bit = PyLong_AsLong(bit_value);  // Convert Python integer to C long
+
+        // Validate bit value (must be either 0 or 1)
+        if (bit < 0 || bit > 1) {
+            PyErr_SetString(PyExc_ValueError, "Bits must be 0 or 1.");
+            return NULL;
+        }
+        if (bit == 1) {
+            flags |= (1UL << m); // Set the bit at the correct position
+        }
+    }
+
+    dm->flags = flags;
 
     return Py_None;
 }

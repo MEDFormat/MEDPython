@@ -147,7 +147,7 @@ class DhnMedPyTest(unittest.TestCase):
 
         ms.close()
 
-    # ----- Read metadata test -----
+    # ----- Read data test -----
 
     def test_read_data_matrix(self):
         ms = MedSession(self.session_path, self.level_2_password)

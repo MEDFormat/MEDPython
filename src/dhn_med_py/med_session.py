@@ -87,11 +87,11 @@ class MedDataMatrix:
         dm_flags = read_dm_flags(self.__dm_capsule)
 
         # Session level
-        dm_flag_binary = format(dm_flags['data_matrix_flags'], '064b')[::-1]
+        dm_flag_binary = dm_flags['data_matrix_flags']
         dm_session_flag_state = {}
 
         for f, pos in FLAGS['DM'].items():
-            if dm_flag_binary[pos] == '1':
+            if dm_flag_binary[pos] == 1:
                 dm_session_flag_state[f] = True
             else:
                 dm_session_flag_state[f] = False
@@ -102,12 +102,10 @@ class MedDataMatrix:
         dm_flags = {}
 
         # Session level flags
-        flag_str_list = list(format(0, '064b'))
+        flag_list = [0] * 64
         for flag, val in dm_flags_python.items():
-            flag_str_list[FLAGS['DM'][flag]] = str(int(val))
-        flag_str = ''.join(flag_str_list)[::-1]
-        flag_int = int(flag_str, 2)
-        dm_flags['data_matrix_flags'] = flag_int
+            flag_list[FLAGS['DM'][flag]] = int(val)
+        dm_flags['data_matrix_flags'] = flag_list
 
         push_dm_flags(self.__dm_capsule, dm_flags)
 
@@ -462,8 +460,6 @@ class MedDataMatrix:
         return
 
 
-
-
 class MedSession:
     """
     Basic object for reading operations with MED sessions.
@@ -559,7 +555,7 @@ class MedSession:
 
         if reference_channel is not None:
             self.reference_channel = reference_channel
-            
+
         # read channel/session metadata
         self.session_info = read_session_info(self.__sess_capsule)
 
@@ -575,11 +571,11 @@ class MedSession:
         lh_flag_state = {}
 
         # Session level
-        lh_flag_binary = format(lh_flags['session_flags'], '064b')[::-1]
+        lh_flag_binary = lh_flags['session_flags']
         lh_session_flag_state = {}
 
         for f, pos in FLAGS['LH'].items():
-            if lh_flag_binary[pos] == '1':
+            if lh_flag_binary[pos] == 1:
                 lh_session_flag_state[f] = True
             else:
                 lh_session_flag_state[f] = False
@@ -590,9 +586,9 @@ class MedSession:
         lh_channels_flag_state = {}
         for channel, channel_dict in lh_flags['channels'].items():
             lh_channel_flag_state = {}
-            lh_flag_binary = format(channel_dict['channel_flags'], '064b')[::-1]
+            lh_flag_binary = channel_dict['channel_flags']
             for f, pos in FLAGS['LH'].items():
-                if lh_flag_binary[pos] == '1':
+                if lh_flag_binary[pos] == 1:
                     lh_channel_flag_state[f] = True
                 else:
                     lh_channel_flag_state[f] = False
@@ -603,9 +599,9 @@ class MedSession:
             lh_segments_flag_state = {}
             for segment, segment_dict in channel_dict['segments'].items():
                 lh_segment_flag_state = {}
-                lh_flag_binary = format(segment_dict['segment_flags'], '064b')[::-1]
+                lh_flag_binary = segment_dict['segment_flags']
                 for f, pos in FLAGS['LH'].items():
-                    if lh_flag_binary[pos] == '1':
+                    if lh_flag_binary[pos] == 1:
                         lh_segment_flag_state[f] = True
                     else:
                         lh_segment_flag_state[f] = False
@@ -631,32 +627,27 @@ class MedSession:
         lh_flags = {}
 
         # Session level flags
-        flag_str_list = list(format(0, '064b'))
+        flag_list = [0]*64
         for flag, val in lh_flags_python['session_level_lh_flags'].items():
-            flag_str_list[FLAGS['LH'][flag]] = str(int(val))
-        flag_str = ''.join(flag_str_list)[::-1]
-        flag_int = int(flag_str, 2)
-        lh_flags['session_flags'] = flag_int
+            flag_list[FLAGS['LH'][flag]] = int(val)
+
+        lh_flags['session_flags'] = flag_list
 
         lh_flags['channels'] = {}
         for channel, channel_dict in lh_flags_python['channels'].items():
             # Channel level flags
-            flag_str_list = list(format(0, '064b'))
+            flag_list = [0]*64
             for flag, val in channel_dict['channel_level_lh_flags'].items():
-                flag_str_list[FLAGS['LH'][flag]] = str(int(val))
-            flag_str = ''.join(flag_str_list)[::-1]
-            flag_int = int(flag_str, 2)
-            lh_flags['channels'][channel] = {'channel_flags': flag_int}
+                flag_list[FLAGS['LH'][flag]] = int(val)
+            lh_flags['channels'][channel] = {'channel_flags': flag_list}
 
             lh_flags['channels'][channel]['segments'] = {}
             for segment, segment_dict in channel_dict['segments'].items():
                 # Segment level flags
-                flag_str_list = list(format(0, '064b'))
+                flag_list = [0]*64
                 for flag, val in segment_dict['segment_level_lh_flags'].items():
-                    flag_str_list[FLAGS['LH'][flag]] = str(int(val))
-                flag_str = ''.join(flag_str_list)[::-1]
-                flag_int = int(flag_str, 2)
-                lh_flags['channels'][channel]['segments'][segment] = {'segment_flags': flag_int}
+                    flag_list[FLAGS['LH'][flag]] = int(val)
+                lh_flags['channels'][channel]['segments'][segment] = {'segment_flags': flag_list}
 
         push_lh_flags(self.__sess_capsule, lh_flags)
 
