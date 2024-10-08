@@ -2191,7 +2191,7 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
 
     // Create session dict and set session level flags
     flags = sess->header.flags;
-    py_session_dict = Py_BuildValue("{s:L}",
+    py_session_dict = Py_BuildValue("{s:K}",
                                     "session_flags", flags);
 
     n_channels = sess->number_of_time_series_channels;
@@ -2209,7 +2209,7 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
         }
 
         // Create channel dict and set channel level flags
-        py_channel_dict = Py_BuildValue("{s:L}",
+        py_channel_dict = Py_BuildValue("{s:K}",
                                         "channel_flags", flags);
 
         py_segments_dict = PyDict_New();
@@ -2217,7 +2217,7 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
             seg = chan->segments[j];
             flags = seg->header.flags;
             // Create segment dict and set segment level flags
-            py_segment_dict = Py_BuildValue("{s:L}",
+            py_segment_dict = Py_BuildValue("{s:K}",
                                             "segment_flags", flags);
 
             // Set one segment to segments dict
@@ -2359,7 +2359,7 @@ PyObject *read_dm_flags(PyObject *self, PyObject *args)
 
     // Create session dict and set session level flags
     flags = dm->flags;
-    py_dm_dict = Py_BuildValue("{s:L}",
+    py_dm_dict = Py_BuildValue("{s:K}",
                                "data_matrix_flags", flags);
 
     return py_dm_dict;
