@@ -32,9 +32,9 @@ os = sys.platform
 if os == 'linux':
     target = "LINUX_m12"
 elif os == 'darwin':
-    target = "MAC_m12"
+    target = "MACOS_m12"
 elif os == 'win32':
-    target = "WIN_m12"
+    target = "WINDOWS_m12"
 else:
     target = "UNKNOWN"
 
