@@ -61,25 +61,6 @@ static PyObject *test_api(PyObject *self, PyObject *args)
     Py_RETURN_NONE;
 }
 
-si8 *change_pointer(SESSION_m12 *sess, GLOBALS_m12 *globals_m12)
-{
-    si8 *xor_value;
-    
-    if (sess == NULL)
-        return NULL;
-    if (globals_m12 == NULL)
-        return NULL;
-    
-    //printf("sess = %ld\n", sess);
-    xor_value = globals_m12->session_UID + globals_m12->session_start_time;
-    //printf("sess xor = %ld\n", (si8)(sess) ^ (si8)(xor_value));
-    
-    //printf("reverse= %ld\n", (si8)(xor_value) ^ ((si8)(sess) ^ (si8)(xor_value)));
-    
-    return ((si8)(sess) ^ (si8)(xor_value));
-    
-}
-
 void dm_capsule_destructor(PyObject *capsule) {
     void *dm = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
     if (dm != NULL) {
@@ -291,8 +272,6 @@ void    *initialize_time_slice(TIME_SLICE_m12 *slice, PyObject *start_index_obj,
     slice->end_sample_number = end_index;
 
 //    G_show_time_slice_m12(slice);
-
-    return;
 }
 
 
