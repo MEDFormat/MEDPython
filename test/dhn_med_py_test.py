@@ -211,13 +211,13 @@ class DhnMedPyTest(unittest.TestCase):
 
         # TODO: fix this - this currently fails
         # Nothing specified - time (i.e. read whole recording)
-        # dm.major_dimension = 'channel'
-        #
-        # # channel_names = ms.get_channel_names()
-        # # ms.set_channel_active(channel_names, False)
-        # # ms.set_channel_active(channel_names[0], True)
-        # # print("Reading data")
-        # # matrix_result = dm.get_matrix_by_time(None, None, None, 5000)
+        dm.major_dimension = 'channel'
+
+        # channel_names = ms.get_channel_names()
+        # ms.set_channel_active(channel_names, False)
+        # ms.set_channel_active(channel_names[0], True)
+        # print("Reading data")
+        # matrix_result = dm.get_matrix_by_time(None, None, None, 5000)
         #
         # print(matrix_result['samples'].shape)
         #
@@ -303,10 +303,9 @@ class DhnMedPyTest(unittest.TestCase):
         assert len(data[ref_index]) == int(10 * ref_fs) + 5
 
         # Read by time - no end specified
-        # data = ms.read_by_time(ref_channel_metadata['end_time'] - 10 * 1000000, None, ref_channel)
+        data = ms.read_by_time(ref_channel_metadata['end_time'] - 10 * 1000000, None, ref_channel)
 
-        # print("Read by time - no end specified")
-        # print(len(data))
+        assert len(data) == int(10 * ref_fs) + 5 # TODO: why +5?
 
         # Read by time - nothing specified
         data = ms.read_by_time(None, None)
