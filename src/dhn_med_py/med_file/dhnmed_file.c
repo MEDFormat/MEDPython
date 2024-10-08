@@ -1184,7 +1184,6 @@ PyObject*    fill_session_records(SESSION_m12 *sess,  DATA_MATRIX_m12 *dm)
 
     // create python records
     for (i = 0; i < n_recs; ++i) {
-        printf("Record number %d\n", i);
         if (dm != NULL)
             temp_record = fill_record_matrix(rec_ptrs[i], dm);
         else
@@ -1413,8 +1412,8 @@ PyObject    *fill_record(RECORD_HEADER_m12 *rh)
                         py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:s,s:d,s:s}",
                                                   "start_time", rh->start_time,
                                                   "start_time_string", check_utf8(time_str),
-                                                  "type_string", rh->type_string,
-                                                  "type_code", check_utf8(rh->type_code),
+                                                  "type_string", check_utf8(rh->type_string),
+                                                  "type_code", rh->type_code,
                                                   "version_string", check_utf8(ver_str),
                                                   "encryption", enc_level,
                                                   "encryption_string", check_utf8(enc_str),
@@ -1431,8 +1430,8 @@ PyObject    *fill_record(RECORD_HEADER_m12 *rh)
                         py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:s,s:s,s:s}",
                                                   "start_time", rh->start_time,
                                                   "start_time_string", check_utf8(time_str),
-                                                  "type_string", rh->type_string,
-                                                  "type_code", check_utf8(rh->type_code),
+                                                  "type_string", check_utf8(rh->type_string),
+                                                  "type_code", rh->type_code,
                                                   "version_string", check_utf8(ver_str),
                                                   "encryption", enc_level,
                                                   "encryption_string", check_utf8(enc_str),
@@ -2655,7 +2654,7 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
     slice = &local_sess_slice;
     G_initialize_time_slice_m12(slice);
     initialize_time_slice(slice, start_index_input_obj, end_index_input_obj, start_time_input_obj, end_time_input_obj);
-    G_show_time_slice_m12(slice);
+//    G_show_time_slice_m12(slice);
     
     // set flags to only get records
     //flags = LH_READ_SLICE_SESSION_RECORDS_m12 | LH_READ_SLICE_SEGMENTED_SESS_RECS_m12 | LH_MAP_ALL_SEGMENTS_m12;
@@ -2665,8 +2664,6 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
     //G_read_session_m12(sess, sess_slice, NULL, 0, flags, NULL);
     G_read_session_m12(sess, slice);
 
-    printf("Session read\n");
-    
     // session records
     py_records = fill_session_records(sess, NULL);
     
