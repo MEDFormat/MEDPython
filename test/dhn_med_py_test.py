@@ -28,20 +28,20 @@ from dhn_med_py.med_session import MedSession
 
 class DhnMedPyTest(unittest.TestCase):
 
-    @classmethod
-    def setUpClass(self):
+    def setUp(self):
 
         self.level_1_password = 'L1_password'
         self.level_2_password = 'L2_password'
         self.session_path = 'var_sf.medd'
-        self.sleep_time = 0.2
+        self.sleep_time = 0.5
 
-        # self.mef_session = MedSession(self.session_path, self.level_2_password)
+        self.mef_session = MedSession(self.session_path, self.level_2_password)
 
     # ----- MED flags test -----
     def test_lh_flags(self):
 
-        ms = MedSession(self.session_path, self.level_2_password)
+        # ms = MedSession(self.session_path, self.level_2_password)
+        ms = self.mef_session
 
         # Load LH flags
         orig_lh_flags = ms._get_lh_flags()
@@ -62,11 +62,12 @@ class DhnMedPyTest(unittest.TestCase):
         orig_lh_flags['session_level_lh_flags']['LH_UPDATE_EPHEMERAL_DATA_m12'] = True
         ms._set_lh_flags(orig_lh_flags)
 
-        ms.close()
+        # ms.close()
         time.sleep(self.sleep_time)
 
     def test_dm_flags(self):
-        ms = MedSession(self.session_path, self.level_2_password)
+        # ms = MedSession(self.session_path, self.level_2_password)
+        ms = self.mef_session
 
         dm = ms.data_matrix
 
@@ -109,13 +110,13 @@ class DhnMedPyTest(unittest.TestCase):
         dm.major_dimension = 'sample'
         assert dm.major_dimension != orig_major_dimension
 
-        ms.close()
+        # ms.close()
         time.sleep(self.sleep_time)
 
 
     def test_set_channel(self):
-        ms = MedSession(self.session_path, self.level_2_password)
-
+        # ms = MedSession(self.session_path, self.level_2_password)
+        ms = self.mef_session
         channel_names = ms.get_channel_names()
 
         ms.set_channel_active(channel_names, False)
@@ -130,11 +131,14 @@ class DhnMedPyTest(unittest.TestCase):
             else:
                 assert lh_flags['channels'][channel]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] is False
 
-        ms.close()
+        ms.set_channel_active(channel_names, True)
+
+        # ms.close()
         time.sleep(self.sleep_time)
 
     def test_set_reference_channel(self):
-        ms = MedSession(self.session_path, self.level_2_password)
+        # ms = MedSession(self.session_path, self.level_2_password)
+        ms = self.mef_session
 
         ref_channel = ms.reference_channel
 
@@ -146,13 +150,14 @@ class DhnMedPyTest(unittest.TestCase):
 
         assert ms.reference_channel == channel_names[0]
 
-        ms.close()
+        # ms.close()
         time.sleep(self.sleep_time)
 
     # ----- Read data test -----
 
     def test_read_data_matrix(self):
-        ms = MedSession(self.session_path, self.level_2_password)
+        # ms = MedSession(self.session_path, self.level_2_password)
+        ms = self.mef_session
         dm = ms.data_matrix
 
         # Get required metadata
@@ -226,11 +231,12 @@ class DhnMedPyTest(unittest.TestCase):
         # assert matrix_result['samples'].shape[0] == 4
         # assert matrix_result['samples'].shape[1] == 5000
 
-        ms.close()
+        # ms.close()
         time.sleep(self.sleep_time)
 
     def test_read_session(self):
-        ms = MedSession(self.session_path, self.level_2_password)
+        # ms = MedSession(self.session_path, self.level_2_password)
+        ms = self.mef_session
 
         # Get required metadata
         start_time = ms.session_info['metadata']['start_time']
@@ -316,23 +322,25 @@ class DhnMedPyTest(unittest.TestCase):
         assert len(data) == len(channel_names)
         assert len(data[ref_index]) == ref_n_samples + 1
 
-        ms.close()
+        # ms.close()
         time.sleep(self.sleep_time)
 
     # ----- Helpers -----
 
     def test_get_records(self):
-        ms = MedSession(self.session_path, self.level_2_password)
+        # ms = MedSession(self.session_path, self.level_2_password)
+        ms = self.mef_session
 
         records = ms.get_session_records()
 
         assert len(records) == 7
 
-        ms.close()
+        # ms.close()
         time.sleep(self.sleep_time)
 
     def test_get_contigua(self):
-        ms = MedSession(self.session_path, self.level_2_password)
+        # ms = MedSession(self.session_path, self.level_2_password)
+        ms = self.mef_session
 
         channel_names = ms.get_channel_names()
         channel_name = channel_names[0]
@@ -357,11 +365,15 @@ class DhnMedPyTest(unittest.TestCase):
 
         # assert contigua[0]['end_index'] == channel_end_sample - 1
 
-        ms.close()
+        # ms.close()
         time.sleep(self.sleep_time)
 
     # def test_wrong_password(self):
     #     pass
+
+    def tearDown(self):
+        self.mef_session.close()
+
 
 if __name__ == '__main__':
     unittest.main()
