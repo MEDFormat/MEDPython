@@ -74,6 +74,9 @@ void session_capsule_destructor (PyObject *capsule){
     if (sess != NULL) {
         G_free_session_m12(sess, TRUE_m12);
     }
+    if (globals_m12 != NULL) {
+        G_free_globals_m12(TRUE_m12);
+    }
 }
 
 PyObject    *set_session_capsule_destructor (PyObject *self, PyObject *args){
