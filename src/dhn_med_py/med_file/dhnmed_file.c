@@ -186,6 +186,10 @@ void    *initialize_time_slice(TIME_SLICE_m12 *slice, PyObject *start_index_obj,
 //    si1         *temp_str_bytes;
 //    printf("Start index is %d\n", start_index);
 
+    // Set default values
+    start_time = end_time = UUTC_NO_ENTRY_m12;
+    start_index = end_index = SAMPLE_NUMBER_NO_ENTRY_m12;
+
     // Check if input objects are NULL and raise error if they are
     if (start_index_obj == NULL){
         PyErr_SetString(PyExc_RuntimeError, "Start index object cannot be NULL\n");
@@ -1109,7 +1113,7 @@ PyObject*    fill_session_records(SESSION_m12 *sess,  DATA_MATRIX_m12 *dm)
     PyObject                *temp_record;
     FILE_PROCESSING_STRUCT_m12    *rd_fps;
     
-    
+
     n_segs = sess->time_slice.number_of_segments;
     
     // set up sorted records array
@@ -1126,7 +1130,7 @@ PyObject*    fill_session_records(SESSION_m12 *sess,  DATA_MATRIX_m12 *dm)
     }
     if (tot_recs == 0)
         return PyList_New(0);
-    
+
     rec_ptrs = (RECORD_HEADER_m12 **) malloc((size_t) tot_recs * sizeof(RECORD_HEADER_m12 *));
     n_recs = 0;
     if (sess->record_data_fps != NULL) {
@@ -1177,20 +1181,21 @@ PyObject*    fill_session_records(SESSION_m12 *sess,  DATA_MATRIX_m12 *dm)
     qsort((void *) rec_ptrs, n_recs, sizeof(RECORD_HEADER_m12 *), rec_compare);
     
     py_record_list = PyList_New(n_recs);
-    
+
     // create python records
     for (i = 0; i < n_recs; ++i) {
+        printf("Record number %d\n", i);
         if (dm != NULL)
             temp_record = fill_record_matrix(rec_ptrs[i], dm);
         else
             temp_record = fill_record(rec_ptrs[i]);
         PyList_SetItem(py_record_list, i, temp_record);
     }
-    
+
     // clean up
     if (rec_ptrs != NULL)
         free(rec_ptrs);
-    
+
     return py_record_list;
 }
 
@@ -1210,7 +1215,7 @@ PyObject    *fill_record(RECORD_HEADER_m12 *rh)
     
     // start time string
     STR_time_string_m12(rh->start_time, time_str, TRUE_m12, FALSE_m12, FALSE_m12);
-    
+
     // version
     ver = (sf8) rh->version_major + ((sf8) rh->version_minor / (sf8) 1000.0);
     sprintf(ver_str, "%0.3lf", ver);
@@ -1239,7 +1244,7 @@ PyObject    *fill_record(RECORD_HEADER_m12 *rh)
             break;
     }
     
-    
+
     if (globals_m12->RTO_known == TRUE_m12)
         relative_days = FALSE_m12;
     else
@@ -1325,7 +1330,6 @@ PyObject    *fill_record(RECORD_HEADER_m12 *rh)
             }
             break;
         case REC_CSti_TYPE_CODE_m12:
-            printf ("got here 1\n");
             CSti = (REC_CSti_v10_m12 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m12);
             if (enc_level <= 0) {
                 py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:I,s:s,s:s,s:s}",
@@ -1354,7 +1358,6 @@ PyObject    *fill_record(RECORD_HEADER_m12 *rh)
                                           "stimulus_type", "<no access>",
                                           "patient_response", "<no access>");
             }
-            printf ("got here 2\n");
             break;
         case REC_Sgmt_TYPE_CODE_m12:
             Sgmt = (REC_Sgmt_v10_m12 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m12);
@@ -1367,7 +1370,6 @@ PyObject    *fill_record(RECORD_HEADER_m12 *rh)
                     if (*text)
                         valid_text = 1;
                 }
-                
                 if (Sgmt->acquisition_channel_number != REC_Sgmt_v10_ACQUISITION_CHANNEL_NUMBER_ALL_CHANNELS_m12) {
                     if (Sgmt->sampling_frequency != REC_Sgmt_v10_SAMPLING_FREQUENCY_VARIABLE_m12) {
                         py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:I,s:d,s:s}",
@@ -1480,7 +1482,7 @@ PyObject    *fill_record(RECORD_HEADER_m12 *rh)
                                       "comment", enc_level <= 0 ? " unknown record type" : "<no access>");
             break;
     }
-    
+
     return py_record;
     
     
@@ -2614,7 +2616,6 @@ PyObject *find_discontinuities(PyObject *self, PyObject *args)
     return py_contigua;
 }
 
-// TODO - use py slice initialization here
 PyObject *get_session_records(PyObject *self, PyObject *args)
 {
     SESSION_m12             *sess;
@@ -2654,7 +2655,7 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
     slice = &local_sess_slice;
     G_initialize_time_slice_m12(slice);
     initialize_time_slice(slice, start_index_input_obj, end_index_input_obj, start_time_input_obj, end_time_input_obj);
-
+    G_show_time_slice_m12(slice);
     
     // set flags to only get records
     //flags = LH_READ_SLICE_SESSION_RECORDS_m12 | LH_READ_SLICE_SEGMENTED_SESS_RECS_m12 | LH_MAP_ALL_SEGMENTS_m12;
@@ -2663,6 +2664,8 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
     G_propogate_flags_m12((LEVEL_HEADER_m12 *) sess, new_flags);
     //G_read_session_m12(sess, sess_slice, NULL, 0, flags, NULL);
     G_read_session_m12(sess, slice);
+
+    printf("Session read\n");
     
     // session records
     py_records = fill_session_records(sess, NULL);
