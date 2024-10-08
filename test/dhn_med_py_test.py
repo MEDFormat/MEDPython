@@ -318,18 +318,43 @@ class DhnMedPyTest(unittest.TestCase):
 
     # ----- Helpers -----
 
-    # def test_get_records(self):
-    #     ms = MedSession(self.session_path, self.level_2_password)
-    #
-    #     # records = ms.get_session_records()
-    #
-    #     # print(records)
-    #
-    #     ms.close()
-    #
-    # def test_get_contigua(self):
-    #     pass
-    #
+    def test_get_records(self):
+        ms = MedSession(self.session_path, self.level_2_password)
+
+        # records = ms.get_session_records()
+
+        # print(records)
+
+        ms.close()
+
+    def test_get_contigua(self):
+        ms = MedSession(self.session_path, self.level_2_password)
+
+        channel_names = ms.get_channel_names()
+        channel_name = channel_names[0]
+        channel_metadata = [x['metadata'] for x in ms.session_info['channels'] if x['metadata']['channel_name'] == channel_name][0]
+        channel_n_samples = channel_metadata['absolute_end_sample_number'] - channel_metadata['absolute_start_sample_number']
+        ref_channel = ms.reference_channel
+        ref_channel_metadata = [channels_metadata['metadata'] for channels_metadata in ms.session_info['channels'] if
+                                channels_metadata['metadata']['channel_name'] == ref_channel][0]
+        ref_n_samples = ref_channel_metadata['absolute_end_sample_number'] - ref_channel_metadata['absolute_start_sample_number']
+
+        # Find contigua for current reference channel
+        contigua = ms.find_discontinuities()
+
+        assert contigua[0]['end_index'] == ref_n_samples - 1
+
+        # TODO: session info contains number of samples for referential channel not the actual value for channel
+        # Find contigua for a specific channel
+        # contigua = ms.find_discontinuities(channel_name=channel_name)
+        #
+        # print(contigua)
+        # print(channel_n_samples)
+
+        # assert contigua[0]['end_index'] == channel_end_sample - 1
+
+        ms.close()
+
     # def test_wrong_password(self):
     #     pass
 
