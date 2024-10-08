@@ -558,7 +558,7 @@ class MedSession:
             raise MedSession.OpenSessionException("Unspecified error: Unable to open session: " + str(session_path))
 
         if reference_channel is not None:
-            self.set_reference_channel(reference_channel)
+            self.reference_channel = reference_channel
             
         # read channel/session metadata
         self.session_info = read_session_info(self.__sess_capsule)
@@ -950,7 +950,7 @@ class MedSession:
     
         return get_globals_number_of_session_samples(self.__sess_capsule)
         
-    def find_discontinuities(self):
+    def find_discontinuities(self, channel_name=None):
         """
         This function returns a contigua (list of continuous data ranges).
         Each continuous range dictionary has the following elements:
@@ -973,8 +973,15 @@ class MedSession:
         -------
         contigua : list of contigua dicts (continuous data ranges)
         """
-    
-        return find_discontinuities(self.__sess_capsule)
+
+        if channel_name is not None:
+            original_ref_channel = self.reference_channel
+            self.reference_channel = channel_name
+            contigua = find_discontinuities(self.__sess_capsule)
+            self.reference_channel = original_ref_channel
+            return contigua
+        else:
+            return find_discontinuities(self.__sess_capsule)
         
     def get_session_records(self, start_time=None, end_time=None):
         """
@@ -1059,4 +1066,4 @@ class MedSession:
         if self.__sess_capsule is not None and self.__close_on_destruct is True:
             self.close()
         return
-    
+
