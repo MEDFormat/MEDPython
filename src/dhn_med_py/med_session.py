@@ -728,15 +728,18 @@ class MedSession:
             self.set_channel_active(channel_names, False)
             self.set_channel_active(channels, True)
 
-            self.data = read_MED(self.__sess_capsule, start_time, end_time, None, None)
+            data = read_MED(self.__sess_capsule, start_time, end_time, None, None)
 
             self.set_channel_active(channel_names, False)
             self.set_channel_active(curr_active_channels, True)
         else:
-            self.data = read_MED(self.__sess_capsule, start_time, end_time, None, None)
+            data = read_MED(self.__sess_capsule, start_time, end_time, None, None)
 
-        
-        return self.data
+        # If only one channel was read, return array directly
+        if type(channels) is str:
+            data = data[0]
+
+        return data
         
     def read_by_index(self, start_idx, end_idx, channels=None):
         """
