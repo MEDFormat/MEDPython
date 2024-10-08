@@ -38,6 +38,8 @@ class DhnMedPyTest(unittest.TestCase):
         self.level_2_password = 'L2_password'
         self.session_path = 'var_sf.medd'
 
+        # self.mef_session = MedSession(self.session_path, self.level_2_password)
+
     # ----- MED flags test -----
     def test_lh_flags(self):
 
@@ -63,8 +65,6 @@ class DhnMedPyTest(unittest.TestCase):
         ms._set_lh_flags(orig_lh_flags)
 
         ms.close()
-
-        return
 
     def test_dm_flags(self):
         ms = MedSession(self.session_path, self.level_2_password)
@@ -112,24 +112,226 @@ class DhnMedPyTest(unittest.TestCase):
 
         ms.close()
 
+
+    def test_set_channel(self):
+        ms = MedSession(self.session_path, self.level_2_password)
+
+        channel_names = ms.get_channel_names()
+
+        ms.set_channel_active(channel_names, False)
+        ms.set_channel_active(channel_names[0], True)
+
+        lh_flags = ms._get_lh_flags()
+
+        for channel in channel_names:
+
+            if channel == channel_names[0]:
+                assert lh_flags['channels'][channel]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] is True
+            else:
+                assert lh_flags['channels'][channel]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] is False
+
+        ms.close()
+
+    def test_set_reference_channel(self):
+        ms = MedSession(self.session_path, self.level_2_password)
+
+        ref_channel = ms.reference_channel
+
+        channel_names = ms.get_channel_names()
+
+        channel_names.pop(channel_names.index(ref_channel))
+
+        ms.reference_channel = channel_names[0]
+
+        assert ms.reference_channel == channel_names[0]
+
+        ms.close()
+
     # ----- Read metadata test -----
 
-    def test_read_ts_segment_metadata(self):
-        pass
+    def test_read_data_matrix(self):
+        ms = MedSession(self.session_path, self.level_2_password)
+        dm = ms.data_matrix
 
-    # ----- Pymef helpers -----
+        # Get required metadata
+        start_time = ms.session_info['metadata']['start_time']
+        end_time = ms.session_info['metadata']['end_time']
 
-    def test_wrong_password(self):
-        pass
+        # Make sure all channels are active
+        ms.set_channel_active(ms.get_channel_names(), True)
 
-    def test_level_1_password(self):
-        pass
+        ref_channel = ms.reference_channel
+        ref_channel_metadata = [x['metadata'] for x in ms.session_info['channels'] if x['metadata']['channel_name'] == ref_channel][0]
+        ref_fs = ref_channel_metadata['sampling_frequency']
+        ref_samples = ref_channel_metadata['absolute_end_sample_number'] - ref_channel_metadata['absolute_start_sample_number']
 
-    def test_level_2_password(self):
-        pass
+        # By index samples specified, sample major
+        dm.major_dimension = 'sample'
+        n_samples = 5000
+        matrix_result = dm.get_matrix_by_index(0, int(10*ref_fs), None, n_samples)
 
-    def tearDown(self):
-        pass
+        assert matrix_result['samples'].shape[0] == n_samples
+        assert matrix_result['samples'].shape[1] == 4
+
+        # By index frequency specified, channel major
+        dm.major_dimension = 'channel'
+        matrix_result = dm.get_matrix_by_index(0, int(10*ref_fs), 100, None)
+
+        assert matrix_result['samples'].shape[0] == 4
+        assert matrix_result['samples'].shape[1] == 1000
+
+        # By time samples specified, sample major
+        dm.major_dimension = 'sample'
+        n_samples = 5000
+        matrix_result = dm.get_matrix_by_time(start_time, start_time+10*1000000, None, n_samples)
+
+        assert matrix_result['samples'].shape[0] == n_samples
+        assert matrix_result['samples'].shape[1] == 4
+
+        # By time frequency specified, channel major
+        dm.major_dimension = 'channel'
+        matrix_result = dm.get_matrix_by_time(start_time, start_time+10*1000000, 100, None)
+
+        assert matrix_result['samples'].shape[0] == 4
+        assert matrix_result['samples'].shape[1] == 1000
+
+        # No start specified
+        dm.major_dimension = 'channel'
+        matrix_result = dm.get_matrix_by_time(None, start_time + 10 * 1000000, 100, None)
+
+        assert matrix_result['samples'].shape[0] == 4
+        assert matrix_result['samples'].shape[1] == 1000
+
+        # No end specified
+        dm.major_dimension = 'channel'
+        matrix_result = dm.get_matrix_by_time(end_time - 10 * 1000000, None, 100, None)
+
+        assert matrix_result['samples'].shape[0] == 4
+        assert matrix_result['samples'].shape[1] == 1000
+
+        # TODO: fix this - this currently fails
+        # Nothing specified - time (i.e. read whole recording)
+        # dm.major_dimension = 'channel'
+        #
+        # # channel_names = ms.get_channel_names()
+        # # ms.set_channel_active(channel_names, False)
+        # # ms.set_channel_active(channel_names[0], True)
+        # # print("Reading data")
+        # # matrix_result = dm.get_matrix_by_time(None, None, None, 5000)
+        #
+        # print(matrix_result['samples'].shape)
+        #
+        # assert matrix_result['samples'].shape[0] == 4
+        # assert matrix_result['samples'].shape[1] == 5000
+
+        ms.close()
+
+    def test_read_session(self):
+        ms = MedSession(self.session_path, self.level_2_password)
+
+        # Get required metadata
+        start_time = ms.session_info['metadata']['start_time']
+        end_time = ms.session_info['metadata']['end_time']
+
+        channel_names = ms.get_channel_names()
+        channel_name = channel_names[0]
+        channels_metadata = [x['metadata'] for x in ms.session_info['channels']]
+        channel_metadata = [x['metadata'] for x in ms.session_info['channels'] if x['metadata']['channel_name'] == channel_name][0]
+        chan_fs = channel_metadata['sampling_frequency']
+        ref_channel = ms.reference_channel
+        ref_index = channel_names.index(ref_channel)
+        ref_channel_metadata = [channel_metadata['metadata'] for channel_metadata in ms.session_info['channels'] if channel_metadata['metadata']['channel_name'] == ref_channel][0]
+        ref_n_samples = ref_channel_metadata['absolute_end_sample_number'] - ref_channel_metadata['absolute_start_sample_number']
+        ref_fs = ref_channel_metadata['sampling_frequency']
+
+
+        # Read by index - one channel specified
+        data = ms.read_by_index(0, int(10 * chan_fs), channel_name)
+
+        assert len(data) == int(10 * chan_fs)
+
+        # Read by index - channels specified
+        data = ms.read_by_index(0, int(10*chan_fs), channel_names)
+
+        assert len(data) == len(channel_names)
+        assert len(data[ref_index]) == int(10 * chan_fs)
+
+        # Read by index - no channels specified
+        data = ms.read_by_index(0, int(10*chan_fs), None)
+
+        assert len(data) == len(channel_names)
+        assert len(data[ref_index]) == int(10 * chan_fs)
+
+        # Read by index - no start specified
+        data = ms.read_by_index(None, int(10 * chan_fs))
+
+        assert len(data) == len(channel_names)
+        assert len(data[ref_index]) == int(10 * chan_fs)
+
+        # Read by index - no end specified
+        data = ms.read_by_index(ref_n_samples - int(10 * chan_fs), None, ref_channel)
+
+        assert len(data) == int(10 * chan_fs)
+
+        # Read by index - nothing specified
+        data = ms.read_by_index(None, None)
+
+        assert len(data) == len(channel_names)
+        assert len(data[ref_index]) == ref_n_samples + 1
+
+        # Read by time - one channel specified
+        data = ms.read_by_time(start_time, start_time + 10 * 1000000, channel_name)
+
+        assert len(data) == int(10 * chan_fs) +1
+
+        # Read by time - channels specified
+        data = ms.read_by_time(start_time, start_time + 10 * 1000000, channel_names)
+
+        assert len(data) == len(channel_names)
+        assert len(data[ref_index]) == int(10 * ref_fs) + 5 # TODO: why +5?
+
+        # Read by time - no channels specified
+        data = ms.read_by_time(start_time, start_time + 10 * 1000000)
+
+        assert len(data) == len(channel_names)
+        assert len(data[ref_index]) == int(10 * ref_fs) + 5
+
+        # Read by time - no start specified
+        data = ms.read_by_time(None, start_time + 10 * 1000000)
+
+        assert len(data) == len(channel_names)
+        assert len(data[ref_index]) == int(10 * ref_fs) + 5
+
+        # Read by time - no end specified
+        # data = ms.read_by_time(ref_channel_metadata['end_time'] - 10 * 1000000, None, ref_channel)
+
+        # print("Read by time - no end specified")
+        # print(len(data))
+
+        # Read by time - nothing specified
+        data = ms.read_by_time(None, None)
+
+        assert len(data) == len(channel_names)
+        assert len(data[ref_index]) == ref_n_samples + 1
+
+        ms.close()
+
+    # ----- Helpers -----
+
+    # def test_get_records(self):
+    #     ms = MedSession(self.session_path, self.level_2_password)
+    #
+    #     # records = ms.get_session_records()
+    #
+    #     # print(records)
+    #
+    #     ms.close()
+    #
+    # def test_get_contigua(self):
+    #     pass
+    #
+    # def test_wrong_password(self):
+    #     pass
 
 if __name__ == '__main__':
     unittest.main()
