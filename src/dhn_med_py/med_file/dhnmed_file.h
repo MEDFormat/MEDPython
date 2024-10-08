@@ -65,6 +65,8 @@ static char read_MED_docstring[] =
 
 
 static PyObject *test_api(PyObject *self, PyObject *args);
+void *initialize_time_slice(TIME_SLICE_m12 *slice, PyObject *start_index_obj, PyObject *end_index_obj, PyObject *start_time_obj, PyObject *end_time_obj);
+
 
 void session_capsule_destructor(PyObject *capsule);
 void dm_capsule_destructor(PyObject *capsule);

@@ -684,10 +684,10 @@ class MedSession:
         
         Parameters
         ---------
-        start_time: int
+        start_time: int or None
             start_time is inclusive.
             see note above on absolute vs. relative times
-        end_time: int
+        end_time: int or None
             end_time is exclusive, per python conventions.
         channels: str or list
             Single channel or list of channels to read.  If not specified, then all active channels will be read.
@@ -708,6 +708,15 @@ class MedSession:
         if self.__sess_capsule is None:
             raise MedSession.ReadSessionException("Unable to read session!  Session is invalid.")
 
+        # Check inputs
+        if start_time is not None:
+            if type(start_time) is not int:
+                raise MedSession.ReadSessionException("start_time must be an int or None")
+
+        if end_time is not None:
+            if type(end_time) is not int:
+                raise MedSession.ReadSessionException("end_time must be an int or None")
+
         # Activate specified channels
         if channels is not None:
             channel_names = self.get_channel_names()
@@ -719,12 +728,12 @@ class MedSession:
             self.set_channel_active(channel_names, False)
             self.set_channel_active(channels, True)
 
-            self.data = read_MED(self.__sess_capsule, int(start_time), int(end_time))
+            self.data = read_MED(self.__sess_capsule, start_time, end_time, None, None)
 
             self.set_channel_active(channel_names, False)
             self.set_channel_active(curr_active_channels, True)
         else:
-            self.data = read_MED(self.__sess_capsule, int(start_time), int(end_time))
+            self.data = read_MED(self.__sess_capsule, start_time, end_time, None, None)
 
         
         return self.data
@@ -742,9 +751,9 @@ class MedSession:
         
         Parameters
         ---------
-        start_idx: int
+        start_idx: int or None
             start_idx is inclusive.
-        end_idx: int
+        end_idx: int or None
             end_idx is exclusive, per python conventions.
         channels: str or list
             Single channel or list of channels to read.  If not specified, then all active channels will be read.
@@ -765,6 +774,19 @@ class MedSession:
         if self.__sess_capsule is None:
             raise MedSession.ReadSessionException("Unable to read session!  Session is invalid.")
 
+        # Check inputs
+        if start_idx is not None:
+            if type(start_idx) is not int:
+                raise MedSession.ReadSessionException("start_idx must be an int or None")
+
+        if end_idx is not None:
+            if type(end_idx) is not int:
+                raise MedSession.ReadSessionException("end_idx must be an int or None")
+
+        if type(channels) is str:
+            if channels not in self.get_channel_names():
+                raise MedSession.ReadSessionException("Invalid channel name specified.")
+
         # Activate specified channels
         if channels is not None:
             channel_names = self.get_channel_names()
@@ -776,14 +798,18 @@ class MedSession:
             self.set_channel_active(channel_names, False)
             self.set_channel_active(channels, True)
 
-            self.data = read_MED(self.__sess_capsule, "no_entry", "no_entry", int(start_idx), int(end_idx))
+            data = read_MED(self.__sess_capsule, None, None, start_idx, end_idx)
 
             self.set_channel_active(channel_names, False)
             self.set_channel_active(curr_active_channels, True)
         else:
-            self.data = read_MED(self.__sess_capsule, "no_entry", "no_entry", int(start_idx), int(end_idx))
+            data = read_MED(self.__sess_capsule, None, None, start_idx, end_idx)
 
-        return self.data
+        # If only one channel was read, return array directly
+        if type(channels) is str:
+            data = data[0]
+
+        return data
         
     def sort_chans_by_acq_num(self):
         """
@@ -947,7 +973,7 @@ class MedSession:
     
         return find_discontinuities(self.__sess_capsule)
         
-    def get_session_records(self, start_time='start', end_time='end'):
+    def get_session_records(self, start_time=None, end_time=None):
         """
         This function returns a list of records corresponding to the time
         constraints of start_time and end_time.
@@ -956,10 +982,10 @@ class MedSession:
         
         Parameters
         ---------
-        start_time: int
+        start_time: int or None
             start_time is inclusive.
             see note above on absolute vs. relative times
-        end_time: int
+        end_time: int or None
             end_time is exclusive, per python conventions.
         
         Returns

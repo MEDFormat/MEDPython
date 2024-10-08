@@ -174,6 +174,124 @@ PyObject            *initialize_session(PyObject *self, PyObject *args)
     return PyCapsule_New((void *) sess, "session", session_capsule_destructor);
 }
 
+void    *initialize_time_slice(TIME_SLICE_m12 *slice, PyObject *start_index_obj, PyObject *end_index_obj, PyObject *start_time_obj, PyObject *end_time_obj)
+{
+
+    si8                                     start_time, end_time, start_index, end_index;
+
+    PyObject                                *number;
+
+
+//    PyObject    *temp_UTF_str;
+//    si1         *temp_str_bytes;
+//    printf("Start index is %d\n", start_index);
+
+    // Check if input objects are NULL and raise error if they are
+    if (start_index_obj == NULL){
+        PyErr_SetString(PyExc_RuntimeError, "Start index object cannot be NULL\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    if (end_index_obj == NULL){
+        PyErr_SetString(PyExc_RuntimeError, "End index object cannot be NULL\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    if (start_time_obj == NULL){
+        PyErr_SetString(PyExc_RuntimeError, "Start time object cannot be NULL\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    if (end_time_obj == NULL){
+        PyErr_SetString(PyExc_RuntimeError, "End time object cannot be NULL\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    // Indices and times are mutually exclusive
+    if ((start_index_obj != Py_None || end_index_obj != Py_None) && (start_time_obj != Py_None || end_time_obj != Py_None)){
+        PyErr_SetString(PyExc_RuntimeError, "Specifying indices and times is mutually exclusive\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    if (start_index_obj == Py_None){
+        if (start_time_obj == Py_None && end_time_obj == Py_None && end_index_obj != Py_None)
+            start_index = BEGINNING_OF_SAMPLE_NUMBERS_m12;
+        }
+    else if (PyNumber_Check(start_index_obj))
+        start_index = (si8) PyLong_AsLong(start_index_obj);
+//            PyObject* number = PyNumber_Long(start_time_obj);
+//            start_time = PyLong_AsLongLong(number);
+    else {
+        PyErr_SetString(PyExc_RuntimeError, "Start Index must be an integer or None\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    if (end_index_obj == Py_None){
+        if (start_time_obj == Py_None && end_time_obj == Py_None && start_index_obj != Py_None)
+            end_index = END_OF_SAMPLE_NUMBERS_m12;
+        }
+    else if (PyNumber_Check(end_index_obj)){
+        end_index = (si8) PyLong_AsLong(end_index_obj);
+        end_index = end_index - 1;   //subtract one, since in Python end values are exclusive
+        }
+    else {
+        PyErr_SetString(PyExc_RuntimeError, "End Index must be an integer or None\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    if (start_time_obj == Py_None){
+        if (start_index_obj == Py_None && end_index_obj == Py_None)
+            start_time = BEGINNING_OF_TIME_m12;
+        else
+            start_time = UUTC_NO_ENTRY_m12;
+        }
+    else if (PyNumber_Check(start_time_obj))
+        start_time = (si8) PyLong_AsLong(start_time_obj);
+    else {
+        PyErr_SetString(PyExc_RuntimeError, "Start Time must be an integer or None\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    if (end_time_obj == Py_None){
+        if (start_index_obj == Py_None && end_index_obj == Py_None)
+            end_time = END_OF_TIME_m12;
+        else
+            end_time = UUTC_NO_ENTRY_m12;
+        }
+    else if (PyNumber_Check(end_time_obj)){
+        end_time = (si8) PyLong_AsLong(end_time_obj);
+        // make end_time not inclusive, by adjust by 1 microsecond.
+        if (end_time > 0)
+            end_time = end_time - 1;
+        else
+            end_time = end_time + 1;
+        }
+    else {
+        PyErr_SetString(PyExc_RuntimeError, "End Time must be an integer or None\n");
+        PyErr_Occurred();
+        return NULL;
+    }
+
+    // Set values
+    slice->start_time = start_time;
+    slice->end_time = end_time;
+    slice->start_sample_number = start_index;
+    slice->end_sample_number = end_index;
+
+//    G_show_time_slice_m12(slice);
+
+    return;
+}
+
+
 static PyObject *open_MED(PyObject *self, PyObject *args)
 {
     SESSION_m12                             *sess;
@@ -469,7 +587,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     PyObject                                *samples_as_singles_input_obj;
     PyObject                                *start_time_input_obj, *end_time_input_obj, *start_index_input_obj, *end_index_input_obj;
     PyObject                                *py_channel_records, *py_channel_contigua;
-    PyObject                                *py_session, *py_channel, *py_records, *py_contigua, *py_channels;
+    PyObject                                *py_out_tuple, *py_channel, *py_records, *py_contigua, *py_channels;
     PyArrayObject                           *py_array_out;
     npy_intp                                dims[1];
     si4                                     *numpy_arr_data;
@@ -486,7 +604,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     SESSION_m12                             *sess;
     CHANNEL_m12                             *chan;
     SEGMENT_m12                             *seg;
-    TIME_SLICE_m12                          local_sess_slice, *sess_slice, *chan_slice;
+    TIME_SLICE_m12                          local_time_slice, *slice, *sess_slice, *chan_slice;
     TIME_SERIES_METADATA_SECTION_2_m12      *sess_tmd2, *chan_tmd2;
     CMP_PROCESSING_STRUCT_m12               *cps;
 
@@ -529,150 +647,13 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    // process start time
-    if (start_time_input_obj != NULL)
-    {
-        if (PyUnicode_Check(start_time_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(start_time_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-            
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "Start Time (input 2) can be specified as 'start' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "start") == 0) {
-                    start_time = BEGINNING_OF_TIME_m12;
-                } else if (strcmp(temp_str_bytes, "no_entry") == 0) {
-                    start_time = UUTC_NO_ENTRY_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "Start Time (input 2) can be specified as 'start' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        }
-        else if (PyNumber_Check(start_time_input_obj)) {
-            PyObject* number = PyNumber_Long(start_time_input_obj);
-            start_time = PyLong_AsLongLong(number);
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "Start Time (input 2) can be specified as 'start' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-    
-    // process end time
-    if (end_time_input_obj != NULL)
-    {
-        if (PyUnicode_Check(end_time_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(end_time_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-            
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "End Time (input 3) can be specified as 'end' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "end") == 0) {
-                    end_time = END_OF_TIME_m12;
-                } else if (strcmp(temp_str_bytes, "no_entry") == 0) {
-                    end_time = UUTC_NO_ENTRY_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "End Time (input 3) can be specified as 'end' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        }
-        else if (PyNumber_Check(end_time_input_obj)) {
-            PyObject* number = PyNumber_Long(end_time_input_obj);
-            end_time = PyLong_AsLongLong(number);
-            // make end_time not inclusive, by adjust by 1 microsecond.
-            if (end_time > 0)
-                end_time = end_time - 1;
-            else
-                end_time = end_time + 1;
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "End Time (input 3) can be specified as 'end' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-    
-    // process start index
-    if (start_index_input_obj != NULL)
-    {
-        if (PyUnicode_Check(start_index_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(start_index_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-            
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "Start Index (input 4) can be specified as 'start' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "start") == 0) {
-                    start_index = BEGINNING_OF_SAMPLE_NUMBERS_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "Start Index (input 4) can be specified as 'start' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        }
-        else if (PyNumber_Check(start_index_input_obj)) {
-            PyObject* number = PyNumber_Long(start_index_input_obj);
-            start_index = PyLong_AsLongLong(number);
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "Start Index (input 4) can be specified as 'start' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-    
-    // process end index
-    if (end_index_input_obj != NULL)
-    {
-        if (PyUnicode_Check(end_index_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(end_index_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-            
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "End Index (input 5) can be specified as 'end' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "end") == 0) {
-                    end_index = END_OF_SAMPLE_NUMBERS_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "End Index (input 5) can be specified as 'end' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        }
-        else if (PyNumber_Check(end_index_input_obj)) {
-            PyObject* number = PyNumber_Long(end_index_input_obj);
-            end_index = PyLong_AsLongLong(number) - 1;   //subtract one, since in Python end values are exclusive
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "End Index (input 5) can be specified as 'end' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
+    slice = &local_time_slice; // this takes care of freeing memory
+    G_initialize_time_slice_m12(slice);
+    initialize_time_slice(slice, start_index_input_obj, end_index_input_obj, start_time_input_obj, end_time_input_obj);
+//    G_show_time_slice_m12(slice);
 
-    // read session
-    sess_slice = &local_sess_slice;
-    G_initialize_time_slice_m12(sess_slice);
-    sess_slice->start_time = start_time;
-    sess_slice->end_time = end_time;
-    sess_slice->start_sample_number = start_index;
-    sess_slice->end_sample_number = end_index;
+    G_read_session_m12(sess, slice);
 
-//    G_show_time_slice_m12(sess_slice);
-
-    G_read_session_m12(sess, sess_slice);
 
     if (sess == NULL) {
         if (globals_m12->password_data.processed == 0) {
@@ -690,6 +671,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     }
     // use slice from G_read_session_m12();
     sess_slice = &sess->time_slice;
+//    G_show_time_slice_m12(sess_slice);
 //    printf("after:");
 //    G_show_time_slice_m12(sess_slice);
 //    printf("got here b3 slice: %ld %ld\n", sess_slice->start_time, sess_slice->end_time);
@@ -698,9 +680,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     //     ********  Create Python structure  *******
     //     ******************************************
 
-    py_session = Py_None;
     py_channels = Py_None;
-    py_records = Py_None;
     py_contigua = Py_None;
 
     n_channels = sess->number_of_time_series_channels;
@@ -775,20 +755,20 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
 //        chan_tmd2->number_of_samples = TIME_SLICE_SAMPLE_COUNT_m12(chan_slice);
 //        py_channel_metadata = fill_metadata(chan->metadata_fps, chan_slice);
         // fill in channel contigua
-        py_channel_contigua = build_contigua(chan, chan_slice->start_time, chan_slice->end_time);
-
-        py_channel_records = PyList_New(0);
-        py_channel = Py_BuildValue("{s:O,s:O,s:O}",
-//                                    "metadata", py_channel_metadata,
-                                    "data", py_array_out,
-                                    "records", py_channel_records,
-                                    "contigua", py_channel_contigua);
-
-//        Py_DECREF(py_channel_metadata);
-        Py_DECREF(py_array_out);
-        Py_DECREF(py_channel_records);
-        Py_DECREF(py_channel_contigua);
-        PyList_SetItem(py_channels, i, py_channel);
+//        py_channel_contigua = build_contigua(chan, chan_slice->start_time, chan_slice->end_time);
+//
+//        py_channel_records = PyList_New(0);
+//        py_channel = Py_BuildValue("{s:O,s:O,s:O}",
+////                                    "metadata", py_channel_metadata,
+//                                    "data", py_array_out,
+//                                    "records", py_channel_records,
+//                                    "contigua", py_channel_contigua);
+//
+////        Py_DECREF(py_channel_metadata);
+//        Py_DECREF(py_array_out);
+//        Py_DECREF(py_channel_records);
+//        Py_DECREF(py_channel_contigua);
+        PyList_SetItem(py_channels, i, py_array_out);
         ++i;
 
     }
@@ -804,57 +784,61 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
 //    printf("go here post-records\n");
 
     // Create session contiguous samples output structure
-    if (n_channels > 0) {
-
-        PyObject                        *py_contiguon;
-        PyObject                        *first_chan;
-        PyObject                        *first_chan_contigua;
-        PyObject                        *py_contiguon_read;
-        si8                             current_start_time, current_start_index, current_end_time, current_end_index;
-
-        first_chan = PyList_GetItem(py_channels, 0);
-        first_chan_contigua = PyObject_GetItem(first_chan, Py_BuildValue("s", "contigua"));
-        int n_contigua = PyList_GET_SIZE(first_chan_contigua);
-
-        py_contigua = PyList_New(n_contigua);
-
-        for (i=0; i< n_contigua; ++i) {
-            py_contiguon_read = PyList_GetItem(first_chan_contigua, i);
-            sess_tmd2 = &sess->time_series_metadata_fps->metadata->time_series_section_2;
-            if (sess_tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12) {
-                current_start_index = -1;
-                current_end_index = -1;
-            } else {
-                current_start_index = PyLong_AsLongLong(PyObject_GetItem(py_contiguon_read, Py_BuildValue("s", "start_index")));
-                current_end_index = PyLong_AsLongLong(PyObject_GetItem(py_contiguon_read, Py_BuildValue("s", "end_index")));
-            }
-            current_start_time = PyLong_AsLongLong(PyObject_GetItem(py_contiguon_read, Py_BuildValue("s", "start_time")));
-            current_end_time = PyLong_AsLongLong(PyObject_GetItem(py_contiguon_read, Py_BuildValue("s", "end_time")));
-            py_contiguon = Py_BuildValue("{s:L,s:L,s:L,s:L}",
-                                         "start_index", current_start_index,
-                                         "end_index", current_end_index,
-                                         "start_time", current_start_time,
-                                         "end_time", current_end_time);
-
-            PyList_SetItem(py_contigua, i, py_contiguon);
-        }
-    } else {
-        // No channels ... so create empty list, and we are done.
-        py_contigua = PyList_New(n_channels);
-    }
+//    printf("Builiding session contigua\n");
+//    if (n_channels > 0) {
+//
+//        PyObject                        *py_contiguon;
+//        PyObject                        *first_chan;
+//        PyObject                        *first_chan_contigua;
+//        PyObject                        *py_contiguon_read;
+//        si8                             current_start_time, current_start_index, current_end_time, current_end_index;
+//
+//        first_chan = PyList_GetItem(py_channels, 0);
+//        first_chan_contigua = PyObject_GetItem(first_chan, Py_BuildValue("s", "contigua"));
+//        int n_contigua = PyList_GET_SIZE(first_chan_contigua);
+//
+//        py_contigua = PyList_New(n_contigua);
+//
+//        for (i=0; i< n_contigua; ++i) {
+//            py_contiguon_read = PyList_GetItem(first_chan_contigua, i);
+//            sess_tmd2 = &sess->time_series_metadata_fps->metadata->time_series_section_2;
+//            if (sess_tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12) {
+//                current_start_index = -1;
+//                current_end_index = -1;
+//            } else {
+//                current_start_index = PyLong_AsLongLong(PyObject_GetItem(py_contiguon_read, Py_BuildValue("s", "start_index")));
+//                current_end_index = PyLong_AsLongLong(PyObject_GetItem(py_contiguon_read, Py_BuildValue("s", "end_index")));
+//            }
+//            current_start_time = PyLong_AsLongLong(PyObject_GetItem(py_contiguon_read, Py_BuildValue("s", "start_time")));
+//            current_end_time = PyLong_AsLongLong(PyObject_GetItem(py_contiguon_read, Py_BuildValue("s", "end_time")));
+//            py_contiguon = Py_BuildValue("{s:L,s:L,s:L,s:L}",
+//                                         "start_index", current_start_index,
+//                                         "end_index", current_end_index,
+//                                         "start_time", current_start_time,
+//                                         "end_time", current_end_time);
+//
+//            PyList_SetItem(py_contigua, i, py_contiguon);
+//        }
+//    } else {
+//        // No channels ... so create empty list, and we are done.
+//        py_contigua = PyList_New(n_channels);
+//    }
+//
+//    py_out_tuple = PyTuple_New(2);
+//    PyTuple_SetItem(py_out_tuple, 0, py_channels);
+//    PyTuple_SetItem(py_out_tuple, 1, py_contigua);
 
     // Create session output structure
-    py_session = Py_BuildValue("{s:O,s:O,s:O}",
-                               "channels", py_channels,
-                               "records", py_records,
-                               "contigua", py_contigua);
+//    py_session = Py_BuildValue("{s:O,s:O,s:O}",
+//                               "channels", py_channels,
+//                               "contigua", py_contigua);
 
     // clean up
-    Py_DECREF(py_channels);
-    Py_DECREF(py_records);
-    Py_DECREF(py_contigua);
+//    Py_DECREF(py_channels);
+//    Py_DECREF(py_records);
+//    Py_DECREF(py_contigua);
 
-    return py_session;
+    return py_channels;
 }
 
 
@@ -1840,11 +1824,12 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
 
     SESSION_m12             *sess;
     PyObject                *sess_capsule_object, *dm_capsule_obj;
-    PyObject                *start_time_input_obj, *end_time_input_obj, *n_out_samps_obj;
-    PyObject                *start_index_input_obj, *end_index_input_obj, *major_dimension_obj;
+    PyObject                *start_time_input_obj, *end_time_input_obj;
+    PyObject                *start_index_input_obj, *end_index_input_obj;
+    PyObject                *n_out_samps_obj, *major_dimension_obj;
     PyObject                *sampling_frequency_obj;
     PyObject                *return_records_obj;
-    si8                     start_time, end_time, start_index, end_index, n_out_samps;
+    si8                     n_out_samps;
     PyObject                *temp_UTF_str;
     si1                     *temp_str_bytes;
     sf8 sampling_frequency;
@@ -1853,7 +1838,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     si1            time_str_start[TIME_STRING_BYTES_m12];
     si1            time_str_end[TIME_STRING_BYTES_m12];
     si8            i, k;
-    TIME_SLICE_m12        slice;
+    TIME_SLICE_m12        *slice, local_time_slice;
     si4            seg_idx;
 
     DATA_MATRIX_m12         *dm;
@@ -1909,153 +1894,14 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     dm = (DATA_MATRIX_m12*) PyCapsule_GetPointer(dm_capsule_obj, "dm");
 
     // set defaults, in case args are NULL/None
-    start_time = UUTC_NO_ENTRY_m12;
-    end_time = UUTC_NO_ENTRY_m12;
-    start_index = SAMPLE_NUMBER_NO_ENTRY_m12;
-    end_index = SAMPLE_NUMBER_NO_ENTRY_m12;
     sampling_frequency = FREQUENCY_NO_ENTRY_m12;
     n_out_samps = NUMBER_OF_SAMPLES_NO_ENTRY_m12;
     return_records = TRUE_m12;
 
-    // process start index
-    if (start_index_input_obj != NULL)
-    {
-        if (PyUnicode_Check(start_index_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(start_index_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "Start Index (input 4) must be specified as 'start' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "start") == 0) {
-                    start_index = BEGINNING_OF_SAMPLE_NUMBERS_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "Start Index (input 4) must be specified as 'start' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        } else if (PyNumber_Check(start_index_input_obj)) {
-            PyObject* number = PyNumber_Long(start_index_input_obj);
-            start_index = PyLong_AsLongLong(number);
-        }
-        else if (start_index_input_obj == Py_None) {
-            start_index = SAMPLE_NUMBER_NO_ENTRY_m12;
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "Start Index (input 4) must be specified as 'start' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-
-    // process end index
-    if (end_index_input_obj != NULL)
-    {
-        if (PyUnicode_Check(end_index_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(end_index_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "End Index (input 5) must be specified as 'end' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "end") == 0) {
-                    end_index = END_OF_SAMPLE_NUMBERS_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "End Index (input 5) must be specified as 'end' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        } else if (PyNumber_Check(end_index_input_obj)) {
-            PyObject* number = PyNumber_Long(end_index_input_obj);
-            end_index = PyLong_AsLongLong(number) - 1;   //subtract one, since in Python end values are exclusive
-        } else if (end_index_input_obj == Py_None) {
-            end_index = SAMPLE_NUMBER_NO_ENTRY_m12;
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "End Index (input 5) must be specified as 'end' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-
-    // process start time
-    if (start_time_input_obj != NULL)
-    {
-        if (PyUnicode_Check(start_time_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(start_time_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "Start Time (input 2) must be specified as 'start' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "start") == 0) {
-                    start_time = BEGINNING_OF_TIME_m12;
-                } else if (strcmp(temp_str_bytes, "no_entry") == 0) {
-                    start_time = UUTC_NO_ENTRY_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "Start Time (input 2) must be specified as 'start' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        }
-        else if (PyNumber_Check(start_time_input_obj)) {
-            PyObject* number = PyNumber_Long(start_time_input_obj);
-            start_time = PyLong_AsLongLong(number);
-        } else if (start_time_input_obj == Py_None) {
-            start_time = UUTC_NO_ENTRY_m12;
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "Start Time (input 2) must be specified as 'start' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-
-    // process end time
-    if (end_time_input_obj != NULL)
-    {
-        if (PyUnicode_Check(end_time_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(end_time_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "End Time (input 3) must be specified as 'end' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "end") == 0) {
-                    end_time = END_OF_TIME_m12;
-                } else if (strcmp(temp_str_bytes, "no_entry") == 0) {
-                    end_time = UUTC_NO_ENTRY_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "End Time (input 3) must be specified as 'end' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        }
-        else if (PyNumber_Check(end_time_input_obj)) {
-            PyObject* number = PyNumber_Long(end_time_input_obj);
-            end_time = PyLong_AsLongLong(number);
-            // make end_time not inclusive, by adjust by 1 microsecond.
-            if (end_time > 0)
-                end_time = end_time - 1;
-            else
-                end_time = end_time + 1;
-        } else if (end_time_input_obj == Py_None) {
-            end_time = UUTC_NO_ENTRY_m12;
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "End Time (input 3) must be specified as 'end' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
+    slice = &local_time_slice; // this takes care of freeing memory
+    G_initialize_time_slice_m12(slice);
+    initialize_time_slice(slice, start_index_input_obj, end_index_input_obj, start_time_input_obj, end_time_input_obj);
+    //G_show_time_slice_m12(slice);
 
     // process n_out_samps
     if (n_out_samps_obj != NULL)
@@ -2077,7 +1923,6 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     // process sampling_frequency
     if (sampling_frequency_obj != NULL)
     {
-        //printf("IN HERE\n");
         if (PyNumber_Check(sampling_frequency_obj)) {
             PyObject* number = PyNumber_Long(sampling_frequency_obj);
             sampling_frequency = (double)(PyLong_AsLong(number));
@@ -2119,13 +1964,6 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
 
     n_chans = sess->number_of_time_series_channels;
 
-
-    G_initialize_time_slice_m12(&slice);
-    slice.start_time = start_time;
-    slice.end_time = end_time;
-    slice.start_sample_number = start_index;
-    slice.end_sample_number = end_index;
-
     // Get data matrix pointer
 
     // Create DM matrix structure
@@ -2140,7 +1978,8 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
 //    printf("samps=%d freq=%f\n",n_out_samps, sampling_frequency);
 
     // Build matrix
-    dm = DM_get_matrix_m12(dm, sess, &slice, FALSE_m12);
+    dm = DM_get_matrix_m12(dm, sess, slice, FALSE_m12);
+
     if (dm == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "get_matrix returned NULL!\n");
         PyErr_Occurred();
@@ -2172,8 +2011,8 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     // Fill in channel names and sampling frequencies
     py_sampling_frequencies = PyList_New(n_active_chans);
     py_channel_names = PyList_New(n_active_chans);
-    slice = sess->time_slice;
-    seg_idx = G_get_segment_index_m12(slice.start_segment_number);
+    slice = &sess->time_slice;
+    seg_idx = G_get_segment_index_m12(slice->start_segment_number);
     for (i = k = 0; k < n_chans; ++k) {
         if ((sess->time_series_channels[k]->flags & LH_CHANNEL_ACTIVE_m12) == 0)
             continue;
@@ -2211,9 +2050,9 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     }
 
     raw_page = Py_BuildValue("{s:L,s:s,s:L,s:s,s:O,s:O,s:O,s:O,s:O,s:O,s:O,s:f,s:L,s:L}",
-                             "start_time", slice.start_time,
+                             "start_time", slice->start_time,
                              "start_time_string", check_utf8(time_str_start),
-                             "end_time", slice.end_time,
+                             "end_time", slice->end_time,
                              "end_time_string", check_utf8(time_str_end),
                              "channel_names", py_channel_names,
                              "channel_sampling_frequencies", py_sampling_frequencies,
@@ -2775,21 +2614,24 @@ PyObject *find_discontinuities(PyObject *self, PyObject *args)
     return py_contigua;
 }
 
-
+// TODO - use py slice initialization here
 PyObject *get_session_records(PyObject *self, PyObject *args)
 {
     SESSION_m12             *sess;
     PyObject                *sess_capsule_object;
     si8                     start_time, end_time;
-    TIME_SLICE_m12          local_sess_slice, *sess_slice;
+    TIME_SLICE_m12          local_sess_slice, *slice;
     ui8                     flags;
     PyObject                *start_time_input_obj, *end_time_input_obj;
+    PyObject                *start_index_input_obj, *end_index_input_obj;
     si1                     *temp_str_bytes;
     PyObject                *temp_UTF_str;
     PyObject                *py_records;
     
     start_time_input_obj = NULL;
     end_time_input_obj = NULL;
+    start_index_input_obj = Py_None;
+    end_index_input_obj = Py_None;
     
     // set defaults for optional arguements
     start_time = UUTC_NO_ENTRY_m12;
@@ -2807,85 +2649,12 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
     }
         
     sess = (SEGMENT_m12*) PyCapsule_GetPointer(sess_capsule_object, "session");
-    
-    // process start time
-    if (start_time_input_obj != NULL)
-    {
-        if (PyUnicode_Check(start_time_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(start_time_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-            
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "Start Time (input 2) can be specified as 'start' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "start") == 0) {
-                    start_time = BEGINNING_OF_TIME_m12;
-                } else if (strcmp(temp_str_bytes, "no_entry") == 0) {
-                    start_time = UUTC_NO_ENTRY_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "Start Time (input 2) can be specified as 'start' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        }
-        else if (PyNumber_Check(start_time_input_obj)) {
-            PyObject* number = PyNumber_Long(start_time_input_obj);
-            start_time = PyLong_AsLongLong(number);
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "Start Time (input 2) can be specified as 'start' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-    
-    // process end time
-    if (end_time_input_obj != NULL)
-    {
-        if (PyUnicode_Check(end_time_input_obj)) {
-            temp_UTF_str = PyUnicode_AsEncodedString(end_time_input_obj, "utf-8","strict"); // Encode to UTF-8 python objects
-            temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
-            
-            if (!*temp_str_bytes) {
-                PyErr_SetString(PyExc_RuntimeError, "End Time (input 3) can be specified as 'end' (default), or an integer\n");
-                PyErr_Occurred();
-                return NULL;
-            } else {
-                if (strcmp(temp_str_bytes, "end") == 0) {
-                    end_time = END_OF_TIME_m12;
-                } else if (strcmp(temp_str_bytes, "no_entry") == 0) {
-                    end_time = UUTC_NO_ENTRY_m12;
-                } else {
-                    PyErr_SetString(PyExc_RuntimeError, "End Time (input 3) can be specified as 'end' (default), or an integer\n");
-                    PyErr_Occurred();
-                    return NULL;
-                }
-            }
-        }
-        else if (PyNumber_Check(end_time_input_obj)) {
-            PyObject* number = PyNumber_Long(end_time_input_obj);
-            end_time = PyLong_AsLongLong(number);
-            // make end_time not inclusive, by adjust by 1 microsecond.
-            if (end_time > 0)
-                end_time = end_time - 1;
-            else
-                end_time = end_time + 1;
-        } else {
-            PyErr_SetString(PyExc_RuntimeError, "End Time (input 3) can be specified as 'end' (default), or an integer\n");
-            PyErr_Occurred();
-            return NULL;
-        }
-    }
-    
+
     // read session to get records
-    sess_slice = &local_sess_slice;
-    G_initialize_time_slice_m12(sess_slice);
-    sess_slice->start_time = start_time;
-    sess_slice->end_time = end_time;
-    sess_slice->start_sample_number = SAMPLE_NUMBER_NO_ENTRY_m12;
-    sess_slice->end_sample_number = SAMPLE_NUMBER_NO_ENTRY_m12;
+    slice = &local_sess_slice;
+    G_initialize_time_slice_m12(slice);
+    initialize_time_slice(slice, start_index_input_obj, end_index_input_obj, start_time_input_obj, end_time_input_obj);
+
     
     // set flags to only get records
     //flags = LH_READ_SLICE_SESSION_RECORDS_m12 | LH_READ_SLICE_SEGMENTED_SESS_RECS_m12 | LH_MAP_ALL_SEGMENTS_m12;
@@ -2893,7 +2662,7 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
     new_flags = LH_READ_SLICE_ALL_RECORDS_m12 | LH_GENERATE_EPHEMERAL_DATA_m12;
     G_propogate_flags_m12((LEVEL_HEADER_m12 *) sess, new_flags);
     //G_read_session_m12(sess, sess_slice, NULL, 0, flags, NULL);
-    G_read_session_m12(sess, sess_slice);
+    G_read_session_m12(sess, slice);
     
     // session records
     py_records = fill_session_records(sess, NULL);
