@@ -321,9 +321,9 @@ class DhnMedPyTest(unittest.TestCase):
     def test_get_records(self):
         ms = MedSession(self.session_path, self.level_2_password)
 
-        # records = ms.get_session_records()
+        records = ms.get_session_records()
 
-        # print(records)
+        assert len(records) == 7
 
         ms.close()
 
