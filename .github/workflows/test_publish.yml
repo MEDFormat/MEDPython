@@ -1,5 +1,5 @@
 
-name: Test Pymef
+name: Test dhn_med_py
 
 on: [push, pull_request]
 
@@ -34,18 +34,23 @@ jobs:
         pip install setuptools
         pip install wheel
         pip install numpy
+      shell: bash
 
     - name: Parse medlib flags
       run: python scripts/parse_medlib_flags.py
+      shell: bash
 
     - name: Build package
       run: python -m build
+      shell: bash
 
     - name: Install package
       run: python -m pip install .
+      shell: bash
 
     - name: Test package
       run: python -m unittest test/dhn_med_py_test.py
+      shell: bash
 
 #  release:
 #    if: contains(github.ref, 'refs/tags/')
