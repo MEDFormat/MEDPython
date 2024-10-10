@@ -43,7 +43,7 @@ FILE_EXT = Extension("dhn_med_py.med_file.dhnmed_file",
                      include_dirs=["dhn_medlib"],
                      extra_compile_args=['-fms-extensions',
                                          '-D'+target,
-                                         '-w', '-O0'])
+                                         '-O3'])
 
 setup(name="dhn_med_py",
       zip_safe=False,
