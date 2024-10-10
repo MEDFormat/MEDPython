@@ -548,10 +548,10 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
     
     // Create session output structure
     py_info = Py_BuildValue("{s:O,s:O,s:O,s:O}",
-                               "metadata", py_metadata,
-                               "channels", py_channels,
-                               "contigua", py_contigua,
-                                "password_hints", py_password_hints);
+                            "metadata", py_metadata,
+                            "channels", py_channels,
+                            "contigua", py_contigua,
+                            "password_hints", py_password_hints);
     Py_DECREF(py_metadata);
     Py_DECREF(py_channels);
     Py_DECREF(py_contigua);
@@ -2295,7 +2295,7 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
             return NULL;
         }
         if (bit == 1) {
-            flags |= (1UL << m); // Set the bit at the correct position
+            flags |= (1ULL << m); // Set the bit at the correct position
         }
     }
 
@@ -2338,7 +2338,7 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
                     return NULL;
                 }
                 if (bit == 1) {
-                    flags |= (1UL << m); // Set the bit at the correct position
+                    flags |= (1ULL << m); // Set the bit at the correct position
                 }
             }
             chan->header.flags = flags;
@@ -2386,7 +2386,7 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
                         return NULL;
                     }
                     if (bit == 1) {
-                        flags |= (1UL << m); // Set the bit at the correct position
+                        flags |= (1ULL << m); // Set the bit at the correct position
                     }
                 }
                 seg->header.flags = flags;
@@ -2484,7 +2484,7 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
             return NULL;
         }
         if (bit == 1) {
-            flags |= (1UL << m); // Set the bit at the correct position
+            flags |= (1ULL << m); // Set the bit at the correct position
         }
     }
 
