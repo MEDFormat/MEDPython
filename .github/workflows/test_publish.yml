@@ -77,6 +77,10 @@ jobs:
         pip install twine
       shell: bash
 
+    - name: Parse medlib flags
+      run: python scripts/parse_medlib_flags.py
+      shell: bash
+
     - name: Build wheels
       run: python -m cibuildwheel --output-dir dist/
       env:
