@@ -17,7 +17,7 @@
 //******************  DARK HORSE NEURO MED Python API  ******************//
 //***********************************************************************//
 
-// Written by Matt Stead and Dan Crepeau
+// Written by Matt Stead, Dan Crepeau and Jan Cimbalnik
 // Copyright Dark Horse Neuro Inc, 2023
 
 #include "dhnmed_file.h"
