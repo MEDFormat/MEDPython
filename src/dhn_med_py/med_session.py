@@ -468,8 +468,7 @@ class MedSession:
     for reading).
     
     A structure called session_info is a member of the class: session_info is created
-    when the session is opened, and is updated each time a channel is made active or
-    inactive.
+    when the session is opened.
     
     The destructor closes open files and frees allocated memory.
 
@@ -481,7 +480,7 @@ class MedSession:
         password for MED session
     reference_channel (default=first channel in the session, in alphanumeric ordering)
         since different channels can have different sampling frequencies,
-        select a particular channel to be used when indexing by sample sample number.
+        select a particular channel to be used when indexing by sample number.
         
     Returns:
     ----------
@@ -810,8 +809,7 @@ class MedSession:
         Re-orders channels by acquisition_channel_number, lowest to highest.
         
         Any future reads (read_by_time, read_by_index, get_raw_page) will use this new ordering for
-        the channel array.  In addition, the session_info structure of the MedSession is also
-        updated with this new ordering.
+        the channel array.
         
         Returns
         -------
@@ -821,7 +819,7 @@ class MedSession:
         sort_channels_by_acq_num(self.__sess_capsule)
         
         # read channel/session metadata
-        self.session_info = read_session_info(self.__sess_capsule)
+        #self.session_info = read_session_info(self.__sess_capsule)
         
         return
 
@@ -878,7 +876,7 @@ class MedSession:
 
         self._set_lh_flags(lh_flags)
 
-        self.session_info = read_session_info(self.__sess_capsule)
+        # self.session_info = read_session_info(self.__sess_capsule)
         
         return
 
