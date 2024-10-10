@@ -46,7 +46,7 @@ jobs:
       shell: bash
 
   release:
-    # if: contains(github.ref, 'refs/tags/')
+    if: contains(github.ref, 'refs/tags/')
     needs: test
 
     runs-on: ${{ matrix.buildplat[0] }}
@@ -88,7 +88,7 @@ jobs:
         TWINE_USERNAME: __token__
         TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
       run: |
-        echo ${TWINE_PASSWORD:0:5}
+        twine upload --skip-existing dist/dhn_med_py*
       shell: bash
 
 
