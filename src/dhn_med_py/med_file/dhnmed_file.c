@@ -211,9 +211,7 @@ void    *initialize_time_slice(TIME_SLICE_m12 *slice, PyObject *start_index_obj,
             start_index = BEGINNING_OF_SAMPLE_NUMBERS_m12;
         }
     else if (PyNumber_Check(start_index_obj))
-        start_index = (si8) PyLong_AsLong(start_index_obj);
-//            PyObject* number = PyNumber_Long(start_time_obj);
-//            start_time = PyLong_AsLongLong(number);
+        start_index = (si8) PyLong_AsLongLong(start_index_obj);
     else {
         PyErr_SetString(PyExc_RuntimeError, "Start Index must be an integer or None\n");
         PyErr_Occurred();
@@ -225,7 +223,7 @@ void    *initialize_time_slice(TIME_SLICE_m12 *slice, PyObject *start_index_obj,
             end_index = END_OF_SAMPLE_NUMBERS_m12;
         }
     else if (PyNumber_Check(end_index_obj)){
-        end_index = (si8) PyLong_AsLong(end_index_obj);
+        end_index = (si8) PyLong_AsLongLong(end_index_obj);
         end_index = end_index - 1;   //subtract one, since in Python end values are exclusive
         }
     else {
@@ -241,7 +239,7 @@ void    *initialize_time_slice(TIME_SLICE_m12 *slice, PyObject *start_index_obj,
             start_time = UUTC_NO_ENTRY_m12;
         }
     else if (PyNumber_Check(start_time_obj))
-        start_time = (si8) PyLong_AsLong(start_time_obj);
+        start_time = (si8) PyLong_AsLongLong(start_time_obj);
     else {
         PyErr_SetString(PyExc_RuntimeError, "Start Time must be an integer or None\n");
         PyErr_Occurred();
@@ -255,7 +253,7 @@ void    *initialize_time_slice(TIME_SLICE_m12 *slice, PyObject *start_index_obj,
             end_time = UUTC_NO_ENTRY_m12;
         }
     else if (PyNumber_Check(end_time_obj)){
-        end_time = (si8) PyLong_AsLong(end_time_obj);
+        end_time = (si8) PyLong_AsLongLong(end_time_obj);
         // make end_time not inclusive, by adjust by 1 microsecond.
         if (end_time > 0)
             end_time = end_time - 1;
