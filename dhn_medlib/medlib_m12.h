@@ -443,6 +443,12 @@ typedef struct {
 	#define GLOBALS_FILE_CREATION_UMASK_DEFAULT_m12		0  // full permissions for everyone (Windows does not support "other" category)
 #endif
 
+// Pipes
+#define READ_END_m12		0
+#define WRITE_END_m12		1
+#define PIPE_FAILURE_m12	((si4) 255)
+#define PIPE_FAILURE_SEND_m12	((si4) -1)  // sent from child, received as (si4) ((ui1) PIPE_FAILURE_m12)
+
 // Error Handling Constants
 #define USE_GLOBAL_BEHAVIOR_m12         ((ui4) 0)
 #define RESTORE_BEHAVIOR_m12            ((ui4) 1)
@@ -659,9 +665,6 @@ typedef struct {
 #define RECORD_INDICES_FILE_TYPE_STRING_m12                     "ridx"			// ascii[4]
 #define RECORD_INDICES_FILE_TYPE_CODE_m12                       (ui4) 0x78646972	// ui4 (little endian)
 // #define RECORD_INDICES_FILE_TYPE_CODE_m12                    (ui4) 0x72696478	// ui4 (big endian)
-#define PARITY_CRC_FILE_TYPE_STRING_m12                   	"pcrc"                  // ascii[4]
-#define PARITY_CRC_FILE_TYPE_CODE_m12                     	(ui4) 0x63726370        // ui4 (little endian)
-// #define PARITY_CRC_FILE_TYPE_CODE_m12                  	(ui4) 0x70637263        // ui4 (big endian)
 
 // Channel Types
 #define UNKNOWN_CHANNEL_TYPE_m12	NO_FILE_TYPE_CODE_m12
@@ -692,7 +695,7 @@ typedef struct {
 // System Pipe flags
 #define SP_DEFAULT_m12			0  // no flags set (default)
 #define SP_TEE_TO_TERMINAL_m12		1  // print buffer(s) to terminal in addition to returning
-#define SP_SEPERATE_STREAMS_m12		2  // return seprate "stdout" & "stderr" buffers (buffer = stdout, e_buffer = stderr), otherwise ganged
+#define SP_SEPARATE_STREAMS_m12		2  // return seprate "stdout" & "stderr" buffers (buffer = stdout, e_buffer = stderr), otherwise ganged
 
 // Spaces Constants
 #define NO_SPACES_m12                           0
@@ -1166,6 +1169,7 @@ si4		PROC_pthread_join_m12(pthread_t_m12 thread_id, void **value_ptr);
 si4		PROC_pthread_mutex_destroy_m12(pthread_mutex_t_m12 *mutex);
 si4		PROC_pthread_mutex_init_m12(pthread_mutex_t_m12 *mutex, pthread_mutexattr_t_m12 *attr);
 si4		PROC_pthread_mutex_lock_m12(pthread_mutex_t_m12 *mutex);
+si4		PROC_pthread_mutex_trylock_m12(pthread_mutex_t_m12 *mutex);
 si4		PROC_pthread_mutex_unlock_m12(pthread_mutex_t_m12 *mutex);
 pthread_t_m12	PROC_pthread_self_m12(void);
 TERN_m12	PROC_set_thread_affinity_m12(pthread_t_m12 *thread_id_p, pthread_attr_t_m12 *attributes, cpu_set_t_m12 *cpu_set_p, TERN_m12 wait_for_lauch);
@@ -1227,19 +1231,6 @@ void			PAR_wait_m12(PAR_INFO_m12 *par_info, si1 *interval);
 //***************************  Parity (PRTY) Functions  ****************************//
 //**********************************************************************************//
 
-// Universal Header fields not xor'ed with channels:
-// (these fields are common to all files in level - not be difficult to repair from those, if damaged)
-//	type_string
-//	MED_version_major
-//	MED_version_minor
-//	byte_order_code
-//	segment_number
-//	session_name
-//	channel_name
-//	session_UID
-//	channel_UID
-//	segment_UID
-
 // Flags
 #define PRTY_GLB_SESS_REC_DATA_m12	((ui4) 1 << 0)
 #define PRTY_GLB_SESS_REC_IDX_m12	((ui4) 1 << 1)
@@ -1292,16 +1283,14 @@ void			PAR_wait_m12(PAR_INFO_m12 *par_info, si1 *interval);
 #define PRTY_TS_MASK_m12		(PRTY_TS_CHAN_m12 | PRTY_TS_SEG_m12)
 #define PRTY_VID_MASK_m12		(PRTY_VID_CHAN_m12 | PRTY_VID_SEG_m12)
 
-// Validate CRC Constants (used in PRTY_validate_m12())
-#define	PRTY_VALID_m12		((ui1) 0)	// valid file
-#define	PRTY_BLOCKS_m12		((ui1) 1 << 0)	// bad blocks returned
-#define	PRTY_E_UNSPEC_m12	((ui1) 1 << 1)	// unspecified error (file, memory, etc.)
-#define	PRTY_E_HEADER_m12	((ui1) 1 << 2)	// error in universal header
-#define	PRTY_E_BODY_m12		((ui1) 1 << 3)	// error in body
-
-// parity file array fixed positions
+// Parity file array fixed positions
 #define PRTY_FILE_CHECK_IDX_m12		0  				// file to check in first slot
 #define PRTY_FILE_DAMAGED_IDX_m12	PRTY_FILE_CHECK_IDX_m12		// damaged file in first slot
+
+// Miscellaneous
+#define PRTY_BLOCK_BYTES_DEFAULT_m12	4096  // used in PRTY_CRC_DATA_m12 (must be multiple of 4)
+#define PRTY_PCRC_UID_m12		((ui8) 0x0123456789ABCDEF)  // used in PRTY_CRC_DATA_m12
+
 
 // Structures
 typedef struct {
@@ -1310,14 +1299,6 @@ typedef struct {
 	FILE		*fp;
 	TERN_m12	finished;  // data incorporated into parity
 } PRTY_FILE_m12;
-
-typedef struct {
-	ui4		self_crc;  // crc of folowing fields
-	ui4		file_crc_1;  // crc of file (copy 1 - mitigate against damage to this file)
-	ui4		file_crc_2;  // crc of file (copy 2 - mitigate against damage to this file)
-	ui4		file_crc_3;  // crc of file (copy 3 - mitigate against damage to this file)
-	si1		path[FULL_FILE_NAME_BYTES_m12];  // path to file at time of crc
-} PRTY_CRC_FILE_m12;
 
 typedef struct {
 	si8	length;
@@ -1333,22 +1314,36 @@ typedef struct {
 	si4		n_files;
 	si4		n_bad_blocks;
 	PRTY_BLOCK_m12	*bad_blocks;
-	ui1		validity_code;
 } PRTY_m12;
+
+typedef struct {
+	ui8		pcrc_UID;  // == PRTY_UID_m12 (marker to confirm identity of this structure)
+	ui8		session_UID;  // present in all parity files
+	ui8		segment_UID;  // zero in parity data that is session level
+	ui4		number_of_blocks;  // number of data blocks (& crcs) preceding this structure
+	ui4		block_bytes;  // bytes per block (except probably the last), multiple of 4 bytes (defaults to 4096)
+} PRTY_CRC_DATA_m12;
+
+// Parity File Structure:
+// 1) parity data
+// 2) crc of parity data in blocks  // used to confirm that parity data is not itself damaged, & if so, to localize the damage, so that it can hopefully still be used & then rebuilt
+// 3) PRTY_CRC_DATA_m12 structure
 
 // Prototypes
 TERN_m12	PRTY_build_m12(PRTY_m12 *parity_ps);
-TERN_m12	PRTY_check_pcrc_m12(si1 *file_path);
 si4		PRTY_file_compare_m12(const void *a, const void *b);
 si1		**PRTY_file_list_m12(si1 *MED_path, si4 *n_files);
+ui4		PRTY_flag_for_path_m12(si1 *path);
+si8		PRTY_pcrc_length_m12(FILE *fp, si1 *file_path);
 TERN_m12	PRTY_recover_segment_header_fields_m12(si1 *MED_file, ui8 *segment_uid, si4 *segment_number);
 TERN_m12	PRTY_repair_file_m12(PRTY_m12 *parity_ps);
 TERN_m12	PRTY_restore_m12(si1 *MED_path);
-TERN_m12	PRTY_show_header_m12(si1 *parity_path);
+TERN_m12	PRTY_set_pcrc_uids_m12(PRTY_CRC_DATA_m12 *pcrc, si1 *MED_path);
 TERN_m12	PRTY_show_pcrc_m12(si1 *file_path);
-ui1        	PRTY_validate_m12(si1 *MED_file, ...);  // varargs(MED_file == NULL): si1 *MED_file, PRTY_BLOCK_m12 **bad_blocks, si4 *n_bad_blocks)
+TERN_m12        PRTY_validate_m12(si1 *file_path, ...);  // varargs(file_path == NULL): si1 *file_path, PRTY_BLOCK_m12 **bad_blocks, si4 *n_bad_blocks, ui4 *n_blocks
+TERN_m12	PRTY_validate_pcrc_m12(si1 *file_path, ...);  // varargs(file_path == NULL): si1 *file_path, PRTY_BLOCK_m12 **bad_blocks, si4 *n_bad_blocks, ui4 *n_blocks
 TERN_m12	PRTY_write_m12(si1 *sess_path, ui4 flags, si4 segment_number);
-TERN_m12	PRTY_write_pcrc_m12(si1 *file_path);
+TERN_m12	PRTY_write_pcrc_m12(si1 *file_path, ui4 block_bytes);
 
 
 
@@ -1414,6 +1409,7 @@ typedef struct {
 	TERN_m12        active;  // interface status
 	TERN_m12        plugged_in;
 } NET_PARAMS_m12;
+
 
 // Prototypes
 TERN_m12	NET_check_internet_connection_m12(void);
@@ -2502,7 +2498,9 @@ si4		G_search_Sgmt_records_m12(Sgmt_RECORD_m12 *Sgmt_records, TIME_SLICE_m12 *sl
 si4		G_segment_for_frame_number_m12(LEVEL_HEADER_m12 *level_header, si8 target_sample);
 si4		G_segment_for_sample_number_m12(LEVEL_HEADER_m12 *level_header, si8 target_sample);
 si4		G_segment_for_uutc_m12(LEVEL_HEADER_m12 *level_header, si8 target_time);
+si4		G_segment_number_for_path_m12(si1 *path);
 void		G_sendgrid_email_m12(si1 *sendgrid_key, si1 *to_email, si1 *cc_email, si1 *to_name, si1 *subject, si1 *content, si1 *from_email, si1 *from_name, si1 *reply_to_email, si1 *reply_to_name);
+si1		*G_session_path_for_path_m12(si1 *path, si1 *sess_path);
 void		G_set_error_m12(const si4 err_code, const si1 *function, const si4 line);
 TERN_m12	G_set_global_time_constants_m12(TIMEZONE_INFO_m12 *timezone_info, si8 session_start_time, TERN_m12 prompt);
 void		G_set_globals_pointer_m12(GLOBALS_m12 *new_globals);
@@ -3296,6 +3294,13 @@ TERN_m12	CMP_find_frequency_scale_m12(CMP_PROCESSING_STRUCT_m12 *cps, void (*com
 void    	CMP_free_buffers_m12(CMP_BUFFERS_m12 *buffers, TERN_m12 free_structure);
 TERN_m12    	CMP_free_cache_m12(CMP_PROCESSING_STRUCT_m12 *cps);
 void    	CMP_free_processing_struct_m12(CMP_PROCESSING_STRUCT_m12 *cps, TERN_m12 free_cps_structure);
+sf8		CMP_gamma_cdf_m12(sf8 x, sf8 k, sf8 theta, sf8 offset);
+sf8		CMP_gamma_cf_m12(sf8 a, sf8 x, sf8 *g_ln);
+sf8		CMP_gamma_inv_cdf_m12(sf8 p, sf8 k, sf8 theta, sf8 offset);
+sf8		CMP_gamma_inv_p_m12(sf8 p, sf8 a);
+sf8		CMP_gamma_ln_m12(sf8 xx);
+sf8		CMP_gamma_p_m12(sf8 a, sf8 x);
+sf8		CMP_gamma_ser_m12(sf8 a, sf8 x, sf8 *g_ln);
 void    	CMP_generate_lossy_data_m12(CMP_PROCESSING_STRUCT_m12 *cps, si4* input_buffer, si4 *output_buffer, ui1 mode);
 void		CMP_generate_parameter_map_m12(CMP_PROCESSING_STRUCT_m12 *cps);
 ui1    		CMP_get_overflow_bytes_m12(CMP_PROCESSING_STRUCT_m12 *cps, ui4 mode, ui4 algorithm);
@@ -3309,6 +3314,7 @@ void    	CMP_lad_reg_2_sf8_m12(sf8 *x_input_buffer, sf8 *y_input_buffer, si8 len
 void    	CMP_lad_reg_2_si4_m12(si4 *x_input_buffer, si4 *y_input_buffer, si8 len, sf8 *m, sf8 *b);
 void    	CMP_lad_reg_sf8_m12(sf8 *y_input_buffer, si8 len, sf8 *m, sf8 *b);
 void    	CMP_lad_reg_si4_m12(si4 *y_input_buffer, si8 len, sf8 *m, sf8 *b);
+sf8		*CMP_lin_interp_2_sf8_m12(si8 *in_x, sf8 *in_y, si8 in_len, sf8 *out_y, si8 *out_len);
 sf8		*CMP_lin_interp_sf8_m12(sf8 *in_data, si8 in_len, sf8 *out_data, si8 out_len);
 si4		*CMP_lin_interp_si4_m12(si4 *in_data, si8 in_len, si4 *out_data, si8 out_len);
 void    	CMP_lin_reg_2_sf8_m12(sf8 *x_input_buffer, sf8 *y_input_buffer, si8 len, sf8 *m, sf8 *b);
@@ -4633,7 +4639,7 @@ si8		strcpy_m12(si1 *target, si1 *source);
 si8		strncat_m12(si1 *target, si1 *source, si4 target_field_bytes);
 si8		strncpy_m12(si1 *target, si1 *source, si4 target_field_bytes);
 si4             system_m12(si1 *command, TERN_m12 null_std_streams, const si1 *function, ui4 behavior_on_fail);
-si4		system_pipe_m12(si1 **buffer_ptr, si8 buf_len, si1 *command, ui4 flags, const si1 *function, ui4 behavior, ...);  // varargs(SP_SEPERATE_STREAMS_m12 set): si1 **e_buffer_ptr, si8 *e_buf_len
+si4		system_pipe_m12(si1 **buffer_ptr, si8 buf_len, si1 *command, ui4 flags, const si1 *function, ui4 behavior, ...);  // varargs(SP_SEPARATE_STREAMS_m12 set): si1 **e_buffer_ptr, si8 e_buf_len
 si4		vasprintf_m12(si1 **target, si1 *fmt, va_list args);
 si4		vfprintf_m12(FILE *stream, si1 *fmt, va_list args);
 si4		vprintf_m12(si1 *fmt, va_list args);
