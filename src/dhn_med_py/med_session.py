@@ -720,6 +720,12 @@ class MedSession:
 
             data = read_MED(self.__sess_capsule, start_time, end_time, None, None)
 
+            # Make sure the data is in requested channels order
+            if type(channels) is list:
+                channel_indices = [channel_names.index(x) for x in channels]
+                reordered_pos = sorted(range(len(channel_indices)), key=lambda x: channel_indices[x])
+                data = [data[i] for i in reordered_pos]
+
             self.set_channel_active(channel_names, False)
             self.set_channel_active(curr_active_channels, True)
         else:
@@ -792,6 +798,12 @@ class MedSession:
             self.set_channel_active(channels, True)
 
             data = read_MED(self.__sess_capsule, None, None, start_idx, end_idx)
+
+            # Make sure the data is in requested channels order
+            if type(channels) is list:
+                channel_indices = [channel_names.index(x) for x in channels]
+                reordered_pos = sorted(range(len(channel_indices)), key=lambda x: channel_indices[x])
+                data = [data[i] for i in reordered_pos]
 
             self.set_channel_active(channel_names, False)
             self.set_channel_active(curr_active_channels, True)

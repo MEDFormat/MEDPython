@@ -21,6 +21,9 @@ United States
 # Standard library imports
 import unittest
 
+# Third party imports
+import numpy as np
+
 # Local imports
 from dhn_med_py.med_session import MedSession
 
@@ -258,6 +261,13 @@ class DhnMedPyTest(unittest.TestCase):
         assert len(data) == len(channel_names)
         assert len(data[ref_index]) == int(10 * chan_fs)
 
+        # Read by index reverted order channels specified
+        rev_data = ms.read_by_index(0, int(10*chan_fs), channel_names[::-1])
+
+        assert len(rev_data) == len(channel_names)
+        assert len(rev_data[-1]) == len(data[0])
+        np.testing.assert_array_equal(rev_data[-1], data[0])
+
         # Read by index - no channels specified
         data = ms.read_by_index(0, int(10*chan_fs), None)
 
@@ -291,6 +301,13 @@ class DhnMedPyTest(unittest.TestCase):
 
         assert len(data) == len(channel_names)
         assert len(data[ref_index]) == int(10 * ref_fs) + 5 # TODO: why +5?
+
+        # Read by time reverted order channels specified
+        rev_data = ms.read_by_time(start_time, start_time + 10 * 1000000, channel_names[::-1])
+
+        assert len(rev_data) == len(channel_names)
+        assert len(rev_data[-1]) == len(data[0])
+        np.testing.assert_array_equal(rev_data[-1], data[0])
 
         # Read by time - no channels specified
         data = ms.read_by_time(start_time, start_time + 10 * 1000000)
