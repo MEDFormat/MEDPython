@@ -647,7 +647,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
             return NULL;
         } else {
             G_warning_message_m12("\nread_MED():\nCannot read session => Check that the password is correct, and that metadata files exist.\n");
-            G_show_password_hints_m12(NULL);
+            G_show_password_hints_m12(NULL, 0);
             PyErr_SetString(PyExc_RuntimeError, "\nread_MED():\nCannot read session => Check that the password is correct, and that metadata files exist.\n");
             PyErr_Occurred();
             return NULL;
