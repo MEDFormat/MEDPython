@@ -45,8 +45,7 @@ jobs:
       run: python -m unittest test/dhn_med_py_test.py
       shell: bash
 
-  release:
-    if: contains(github.ref, 'refs/tags/')
+  release-build-test:
     needs: test
 
     runs-on: ${{ matrix.buildplat[0] }}
