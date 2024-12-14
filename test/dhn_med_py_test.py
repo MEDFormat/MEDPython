@@ -336,15 +336,13 @@ class DhnMedPyTest(unittest.TestCase):
 
     # ----- Helpers -----
 
-    # def test_get_records(self):
-    #     # ms = MedSession(self.session_path, self.level_2_password)
-    #     ms = self.mef_session
-    #
-    #     records = ms.get_session_records()
-    #
-    #     print("Number of records is", len(records))
-    #
-    #     assert len(records) == 7
+    def test_get_records(self):
+        # ms = MedSession(self.session_path, self.level_2_password)
+        ms = self.mef_session
+
+        records = ms.get_session_records()
+
+        assert len(records) == 7
 
         # ms.close()
 
