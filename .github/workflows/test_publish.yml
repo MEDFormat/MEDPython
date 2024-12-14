@@ -54,7 +54,7 @@ jobs:
     strategy:
       matrix:
         buildplat:
-          - [ubuntu-22.04, manylinux_x86_64]
+          - [ubuntu-22.04, manylinux_2_24_x86_64]
           - [macos-13, macosx_x86_64]
           - [macos-14, macosx_arm64]
           - [windows-latest, win_amd64]
@@ -87,12 +87,12 @@ jobs:
         CIBW_BUILD: ${{ matrix.python }}-${{ matrix.buildplat[1] }}
       shell: bash
 
-    - name: Publish package
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: |
-        twine upload --skip-existing dist/dhn_med_py*
-      shell: bash
+#    - name: Publish package
+#      env:
+#        TWINE_USERNAME: __token__
+#        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+#      run: |
+#        twine upload --skip-existing dist/dhn_med_py*
+#      shell: bash
 
 
