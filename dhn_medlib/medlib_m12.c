@@ -61,7 +61,7 @@
 // However, it can be used with in 32-bit contexts without modification at a performance cost.
 
 // The library is written with tab width = indent width = 8 spaces and a monospaced font.
-// Tabs are tabs characters, not spaces.
+// Tabs are tab characters, not spaces.
 // Set your editor preferences to these for intended alignment.
 
 // The library contains some non-standard structures:
@@ -4165,8 +4165,12 @@ TERN_m12	G_free_channel_m12(CHANNEL_m12 *channel, TERN_m12 free_channel_structur
 	if (channel->segments) {
 		for (i = 0; i < globals_m12->number_of_mapped_segments; ++i) {
 			seg = channel->segments[i];
-			if (seg)
-				G_free_segment_m12(seg, TRUE_m12);
+			if (seg) {
+				if (seg->en_bloc_allocation == TRUE_m12)
+					G_free_segment_m12(seg, FALSE_m12);
+				else
+					G_free_segment_m12(seg, TRUE_m12);
+			}
 		}
 		free_m12((void *) channel->segments, __FUNCTION__);  // ok whether allocated en bloc or not
 	}
@@ -4527,8 +4531,12 @@ void	G_free_session_m12(SESSION_m12 *session, TERN_m12 free_session_structure)
 	if (session->time_series_channels) {
 		for (i = 0; i < session->number_of_time_series_channels; ++i) {
 			chan = session->time_series_channels[i];
-			if (chan)
-				G_free_channel_m12(chan, TRUE_m12);
+			if (chan) {
+				if (chan->en_bloc_allocation == TRUE_m12)
+					G_free_channel_m12(chan, FALSE_m12);
+				else
+					G_free_channel_m12(chan, TRUE_m12);
+			}
 		}
 		free_m12((void *) session->time_series_channels, __FUNCTION__);  // ok whether allocated en bloc or not
 	}
@@ -4540,15 +4548,17 @@ void	G_free_session_m12(SESSION_m12 *session, TERN_m12 free_session_structure)
 		}
 		free_m12((void *) session->video_channels, __FUNCTION__);
 	}
-	if (session->segmented_sess_recs)
-		G_free_segmented_sess_recs_m12(session->segmented_sess_recs, TRUE_m12);
-
+	if (session->segmented_sess_recs) {
+		if (session->segmented_sess_recs->en_bloc_allocation == TRUE_m12)
+			G_free_segmented_sess_recs_m12(session->segmented_sess_recs, FALSE_m12);
+		else
+			G_free_segmented_sess_recs_m12(session->segmented_sess_recs, TRUE_m12);
+	}
 	if (session->contigua)
 		free_m12(session->contigua, __FUNCTION__);
 
 	if (free_session_structure == TRUE_m12) {
 		GLOBALS_m12	*globals;
-		
 		
 		free_m12((void *) session, __FUNCTION__);
 		
@@ -5357,7 +5367,6 @@ ui4	G_get_level_m12(si1 *full_file_name, ui4 *input_type_code)
 	}
 	if (G_empty_string_m12(ipinfo_token) == FALSE_m12)
 		sprintf(command + len, "?token=%s", ipinfo_token);
-	printf("%s(%d): command = %s\n", __FUNCTION__, __LINE__, command);
 	
 	buffer = NULL;
 	ret_val = system_pipe_m12(&buffer, 0, command, SP_DEFAULT_m12,  __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
@@ -8138,11 +8147,11 @@ pthread_rval_m12	G_open_segment_thread_m12(void *ptr)
 }
 
 
-TERN_m12	G_open_segmented_session_records(SESSION_m12 *sess)
+TERN_m12	G_open_segmented_session_records_m12(SESSION_m12 *sess)
 {
+	TERN_m12			sess_fs_name;
 	si1				tmp_str[FULL_FILE_NAME_BYTES_m12], num_str[FILE_NUMBERING_DIGITS_m12 + 1];
-	si4				i, j, fe, mapped_segs, seg_idx;
-	TIME_SLICE_m12			*slice;
+	si4				i, fe, mapped_segs;
 	SEGMENTED_SESS_RECS_m12		*ssr;
 	
 #ifdef FN_DEBUG_m12
@@ -8154,11 +8163,13 @@ TERN_m12	G_open_segmented_session_records(SESSION_m12 *sess)
 		if (ssr->flags & LH_OPEN_m12)
 			return(TRUE_m12);
 	
-	sprintf_m12(tmp_str, "%s/%s.%s", sess->path, sess->name, RECORD_DIRECTORY_TYPE_STRING_m12);
+	sprintf_m12(tmp_str, "%s/%s.%s", sess->path, globals_m12->fs_session_name, RECORD_DIRECTORY_TYPE_STRING_m12);
 	fe = G_exists_m12(tmp_str);
-	if (fe == DOES_NOT_EXIST_m12) {  // sess->name defaults to uh_name
+	sess_fs_name = TRUE_m12;
+	if (fe == DOES_NOT_EXIST_m12) {  // sess->name defaults to fs_name
 		if (strcmp(globals_m12->uh_session_name, globals_m12->fs_session_name)) {
-			sprintf_m12(tmp_str, "%s/%s.%s", sess->path, globals_m12->fs_session_name, RECORD_DIRECTORY_TYPE_STRING_m12);
+			sess_fs_name = FALSE_m12;
+			sprintf_m12(tmp_str, "%s/%s.%s", sess->path, globals_m12->uh_session_name, RECORD_DIRECTORY_TYPE_STRING_m12);
 			fe = G_exists_m12(tmp_str);
 		}
 	}
@@ -8167,7 +8178,10 @@ TERN_m12	G_open_segmented_session_records(SESSION_m12 *sess)
 	
 	ssr = sess->segmented_sess_recs = (SEGMENTED_SESS_RECS_m12 *) calloc_m12((size_t) 1, sizeof(SEGMENTED_SESS_RECS_m12), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
 	strcpy_m12(ssr->path, tmp_str);
-	strcpy_m12(ssr->name, sess->name);
+	if (sess_fs_name == TRUE_m12)
+		strcpy_m12(ssr->name, globals_m12->fs_session_name);
+	else
+		strcpy_m12(ssr->name, globals_m12->uh_session_name);
 	ssr->type_code = LH_SEGMENTED_SESS_RECS_m12;
 	ssr->flags = sess->flags;
 	ssr->parent = (void *) sess;
@@ -8175,32 +8189,36 @@ TERN_m12	G_open_segmented_session_records(SESSION_m12 *sess)
 	mapped_segs = globals_m12->number_of_mapped_segments;
 	ssr->record_data_fps = (FILE_PROCESSING_STRUCT_m12 **) calloc_m12((size_t) mapped_segs, sizeof(FILE_PROCESSING_STRUCT_m12 *), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
 	ssr->record_indices_fps = (FILE_PROCESSING_STRUCT_m12 **) calloc_m12((size_t) mapped_segs, sizeof(FILE_PROCESSING_STRUCT_m12 *), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
-	slice = &sess->time_slice;
-	seg_idx = G_get_segment_index_m12(slice->start_segment_number);
-	for (i = slice->start_segment_number, j = seg_idx; i <= slice->end_segment_number; ++i, ++j) {
+	for (i = 0; i < mapped_segs; ++i) {
 		// record indices
-		G_numerical_fixed_width_string_m12(num_str, FILE_NUMBERING_DIGITS_m12, i);
+		G_numerical_fixed_width_string_m12(num_str, FILE_NUMBERING_DIGITS_m12, i + 1);
 		sprintf_m12(tmp_str, "%s/%s_s%s.%s", ssr->path, ssr->name, num_str, RECORD_INDICES_FILE_TYPE_STRING_m12);
 		fe = G_exists_m12(tmp_str);
-		if (fe == DOES_NOT_EXIST_m12) {  // sess->name defaults to uh_name
-			sprintf_m12(tmp_str, "%s/%s_s%s.%s", ssr->path, globals_m12->fs_session_name, num_str, RECORD_INDICES_FILE_TYPE_STRING_m12);
+		if (fe == DOES_NOT_EXIST_m12) {
+			if (sess_fs_name == TRUE_m12)
+				sprintf_m12(tmp_str, "%s/%s_s%s.%s", ssr->path, globals_m12->uh_session_name, num_str, RECORD_INDICES_FILE_TYPE_STRING_m12);
+			else
+				sprintf_m12(tmp_str, "%s/%s_s%s.%s", ssr->path, globals_m12->fs_session_name, num_str, RECORD_INDICES_FILE_TYPE_STRING_m12);
 			fe = G_exists_m12(tmp_str);
 		}
 		if (fe == FILE_EXISTS_m12)
-			ssr->record_indices_fps[j] = G_read_file_m12(NULL, tmp_str, 0, 0, 0, (LEVEL_HEADER_m12 *) ssr, NULL, USE_GLOBAL_BEHAVIOR_m12);
+			ssr->record_indices_fps[i] = G_read_file_m12(NULL, tmp_str, 0, 0, 0, (LEVEL_HEADER_m12 *) ssr, NULL, USE_GLOBAL_BEHAVIOR_m12);
 
 		// record data
 		sprintf_m12(tmp_str, "%s/%s_s%s.%s", ssr->path, ssr->name, num_str, RECORD_DATA_FILE_TYPE_STRING_m12);
 		fe = G_exists_m12(tmp_str);
-		if (fe == DOES_NOT_EXIST_m12) {  // sess->name defaults to uh_name
-			sprintf_m12(tmp_str, "%s/%s_s%s.%s", ssr->path, globals_m12->fs_session_name, num_str, RECORD_DATA_FILE_TYPE_STRING_m12);
+		if (fe == DOES_NOT_EXIST_m12) {  // sess->name defaults to fs_name
+			if (sess_fs_name == TRUE_m12)
+				sprintf_m12(tmp_str, "%s/%s_s%s.%s", ssr->path, globals_m12->uh_session_name, num_str, RECORD_DATA_FILE_TYPE_STRING_m12);
+			else
+				sprintf_m12(tmp_str, "%s/%s_s%s.%s", ssr->path, globals_m12->fs_session_name, num_str, RECORD_DATA_FILE_TYPE_STRING_m12);
 			fe = G_exists_m12(tmp_str);
 		}
 		if (fe == FILE_EXISTS_m12) {
 			if (ssr->flags & LH_READ_FULL_SEGMENTED_SESS_RECS_m12)
-				ssr->record_data_fps[j] = G_read_file_m12(NULL, tmp_str, 0, 0, 0, (LEVEL_HEADER_m12 *) ssr, NULL, USE_GLOBAL_BEHAVIOR_m12);
+				ssr->record_data_fps[i] = G_read_file_m12(NULL, tmp_str, 0, 0, 0, (LEVEL_HEADER_m12 *) ssr, NULL, USE_GLOBAL_BEHAVIOR_m12);
 			else  // just read in data universal header & leave open
-				ssr->record_data_fps[j] = G_read_file_m12(NULL, tmp_str, 0, 0, FPS_UNIVERSAL_HEADER_ONLY_m12, (LEVEL_HEADER_m12 *) ssr, NULL, USE_GLOBAL_BEHAVIOR_m12);
+				ssr->record_data_fps[i] = G_read_file_m12(NULL, tmp_str, 0, 0, FPS_UNIVERSAL_HEADER_ONLY_m12, (LEVEL_HEADER_m12 *) ssr, NULL, USE_GLOBAL_BEHAVIOR_m12);
 		}
 	}
 	
@@ -8600,11 +8618,11 @@ SESSION_m12	*G_open_session_m12(SESSION_m12 *sess, TIME_SLICE_m12 *slice, void *
 
 	// session records
 	if (sess->flags & LH_READ_SESSION_RECORDS_MASK_m12)
-		G_open_session_records(sess);
+		G_open_session_records_m12(sess);
 
 	// segmented session records level
 	if (sess->flags & LH_READ_SEGMENTED_SESS_RECS_MASK_m12)
-		G_open_segmented_session_records(sess);
+		G_open_segmented_session_records_m12(sess);
 	
 	// ephemeral data
 	if (sess->flags & LH_GENERATE_EPHEMERAL_DATA_m12) {
@@ -9183,7 +9201,7 @@ SESSION_m12	*G_open_session_nt_m12(SESSION_m12 *sess, TIME_SLICE_m12 *slice, voi
 }
 
 
-TERN_m12	G_open_session_records(SESSION_m12 *sess)
+TERN_m12	G_open_session_records_m12(SESSION_m12 *sess)
 {
 	si1	tmp_str[FULL_FILE_NAME_BYTES_m12];
 	si4	fe;
@@ -9196,8 +9214,8 @@ TERN_m12	G_open_session_records(SESSION_m12 *sess)
 	if (sess->record_indices_fps == NULL) {
 		sprintf_m12(tmp_str, "%s/%s.%s", sess->path, sess->name, RECORD_INDICES_FILE_TYPE_STRING_m12);
 		fe = G_exists_m12(tmp_str);
-		if (fe == DOES_NOT_EXIST_m12) {  // sess->name defaults to uh_name
-			sprintf_m12(tmp_str, "%s/%s.%s", sess->path, globals_m12->fs_session_name, RECORD_INDICES_FILE_TYPE_STRING_m12);
+		if (fe == DOES_NOT_EXIST_m12) {  // sess->name defaults to fs_name
+			sprintf_m12(tmp_str, "%s/%s.%s", sess->path, globals_m12->uh_session_name, RECORD_INDICES_FILE_TYPE_STRING_m12);
 			fe = G_exists_m12(tmp_str);
 		}
 		if (fe == FILE_EXISTS_m12)
@@ -9210,8 +9228,8 @@ TERN_m12	G_open_session_records(SESSION_m12 *sess)
 	if (sess->record_data_fps == NULL) {
 		sprintf_m12(tmp_str, "%s/%s.%s", sess->path, sess->name, RECORD_DATA_FILE_TYPE_STRING_m12);
 		fe = G_exists_m12(tmp_str);
-		if (fe == DOES_NOT_EXIST_m12) {  // sess->name defaults to uh_name
-			sprintf_m12(tmp_str, "%s/%s.%s", sess->path, globals_m12->fs_session_name, RECORD_DATA_FILE_TYPE_STRING_m12);
+		if (fe == DOES_NOT_EXIST_m12) {  // sess->name defaults to fs_name
+			sprintf_m12(tmp_str, "%s/%s.%s", sess->path, globals_m12->uh_session_name, RECORD_DATA_FILE_TYPE_STRING_m12);
 			fe = G_exists_m12(tmp_str);
 		}
 		if (fe == FILE_EXISTS_m12) {
@@ -10893,7 +10911,7 @@ SESSION_m12	*G_read_session_m12(SESSION_m12 *sess, TIME_SLICE_m12 *slice, ...)  
 	// read session record data
 	if (sess->flags & LH_READ_SESSION_RECORDS_MASK_m12) {
 		if (sess->record_indices_fps == NULL || sess->record_data_fps == NULL)
-			G_open_session_records(sess);
+			G_open_session_records_m12(sess);
 		if (sess->record_indices_fps && sess->record_data_fps)
 			G_read_record_data_m12((LEVEL_HEADER_m12 *) sess, slice);
 	}
@@ -10901,7 +10919,7 @@ SESSION_m12	*G_read_session_m12(SESSION_m12 *sess, TIME_SLICE_m12 *slice, ...)  
 	// read segmented session record data
 	if (sess->flags & LH_READ_SEGMENTED_SESS_RECS_MASK_m12) {
 		if (sess->segmented_sess_recs == NULL)
-			G_open_segmented_session_records(sess);
+			G_open_segmented_session_records_m12(sess);
 		ssr = sess->segmented_sess_recs;
 		if (ssr) {
 			for (i = slice->start_segment_number, j = seg_idx; i <= slice->end_segment_number; ++i, ++j)
@@ -11121,7 +11139,7 @@ SESSION_m12	*G_read_session_nt_m12(SESSION_m12 *sess, TIME_SLICE_m12 *slice, ...
 	// read session record data
 	if (sess->flags & LH_READ_SESSION_RECORDS_MASK_m12) {
 		if (sess->record_indices_fps == NULL || sess->record_data_fps == NULL)
-			G_open_session_records(sess);
+			G_open_session_records_m12(sess);
 		if (sess->record_indices_fps && sess->record_data_fps)
 			G_read_record_data_m12((LEVEL_HEADER_m12 *) sess, slice);
 	}
@@ -11130,7 +11148,7 @@ SESSION_m12	*G_read_session_nt_m12(SESSION_m12 *sess, TIME_SLICE_m12 *slice, ...
 	if (sess->flags & LH_READ_SEGMENTED_SESS_RECS_MASK_m12) {
 		ssr = sess->segmented_sess_recs;
 		if (ssr == NULL)
-			G_open_segmented_session_records(sess);
+			G_open_segmented_session_records_m12(sess);
 		for (i = slice->start_segment_number, j = seg_idx; i <= slice->end_segment_number; ++i, ++j) {
 			if (ssr->record_indices_fps[j] && ssr->record_data_fps[j])
 				G_read_record_data_m12((LEVEL_HEADER_m12 *) ssr, slice, i);
@@ -12843,7 +12861,7 @@ void    G_show_globals_m12(void)
 		printf_m12("Session Name: %s\n", globals->session_name);
 	printf_m12("\tuh_session_name: %s\n", globals->uh_session_name);  // from session universal headers
 	printf_m12("\tfs_session_name: %s\n", globals->fs_session_name);  // from file system (different if user created channel subset with different name)
-	printf_m12("Number of Session Samples \\/ Frames: ");
+	printf_m12("Number of Session Samples | Frames: ");
 	if (globals->number_of_session_samples == SAMPLE_NUMBER_NO_ENTRY_m12)
 		printf_m12("no entry\n");
 	else
@@ -23002,9 +23020,95 @@ void    CMP_set_variable_region_m12(CMP_PROCESSING_STRUCT_m12 *cps)
 #ifndef WINDOWS_m12  // inline causes linking problem in Windows
 inline
 #endif
+void      CMP_sf8_to_si2_m12(sf8 *sf8_arr, si2 *si2_arr, si8 len, TERN_m12 round)
+{
+	sf8	val, pos_inf, neg_inf;
+	
+#ifdef FN_DEBUG_m12
+	G_message_m12("%s()\n", __FUNCTION__);
+#endif
+	
+	if (round == FALSE_m12) {
+		while (len--)
+			*si2_arr++ = (si2) *sf8_arr++;
+		
+		return;
+	}
+	
+	pos_inf = (sf8) POS_INF_SI2_m12;
+	neg_inf = (sf8) NEG_INF_SI2_m12;
+
+	while (len--) {
+		val = *sf8_arr++;
+		if (isnan(val)) {
+			*si2_arr++ = NAN_SI2_m12;
+			continue;
+		}
+		if (val >= (sf8) 0.0) {
+			if ((val += (sf8) 0.5) > pos_inf) {
+				*si2_arr++ = POS_INF_SI2_m12;
+				continue;
+			}
+		} else if ((val -= (sf8) 0.5) < neg_inf) {
+			*si2_arr++ = NEG_INF_SI2_m12;
+			continue;
+		}
+		*si2_arr++ = (si2) val;
+	}
+	
+	return;
+}
+
+
+#ifndef WINDOWS_m12  // inline causes linking problem in Windows
+inline
+#endif
+void      CMP_sf8_to_sf4_m12(sf8 *sf8_arr, sf4 *sf4_arr, si8 len, TERN_m12 round)
+{
+	sf8	val, pos_inf, neg_inf;
+	
+#ifdef FN_DEBUG_m12
+	G_message_m12("%s()\n", __FUNCTION__);
+#endif
+	
+	if (round == FALSE_m12) {
+		while (len--)
+			*sf4_arr++ = (sf4) *sf8_arr++;
+		
+		return;
+	}
+
+	pos_inf = (sf8) FLT_MAX;
+	neg_inf = (sf8) -FLT_MAX;
+	
+	while (len--) {
+		val = *sf8_arr++;
+		if (isnan(val)) {
+			*sf4_arr++ = NAN;
+			continue;
+		}
+		if (val >= (sf8) 0.0) {
+			if ((val += (sf8) 0.5) > pos_inf) {
+				*sf4_arr++ = (sf4) pos_inf;
+				continue;
+			}
+		} else if ((val -= (sf8) 0.5) < neg_inf) {
+			*sf4_arr++ = (sf4) neg_inf;
+			continue;
+		}
+		*sf4_arr++ = (sf4) val;
+	}
+	
+	return;
+}
+
+
+#ifndef WINDOWS_m12  // inline causes linking problem in Windows
+inline
+#endif
 void      CMP_sf8_to_si4_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, TERN_m12 round)
 {
-	sf8	val;
+	sf8	val, pos_inf, neg_inf;
 	
 #ifdef FN_DEBUG_m12
 	G_message_m12("%s()\n", __FUNCTION__);
@@ -23017,6 +23121,9 @@ void      CMP_sf8_to_si4_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, TERN_m12 round
 		return;
 	}
 
+	pos_inf = (sf8) POS_INF_SI4_m12;
+	neg_inf = (sf8) NEG_INF_SI4_m12;
+
 	while (len--) {
 		val = *sf8_arr++;
 		if (isnan(val)) {
@@ -23024,15 +23131,13 @@ void      CMP_sf8_to_si4_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, TERN_m12 round
 			continue;
 		}
 		if (val >= (sf8) 0.0) {
-			if ((val += (sf8) 0.5) > (sf8) POS_INF_SI4_m12) {
+			if ((val += (sf8) 0.5) > pos_inf) {
 				*si4_arr++ = POS_INF_SI4_m12;
 				continue;
 			}
-		} else {
-			if ((val -= (sf8) 0.5) < (sf8) NEG_INF_SI4_m12) {
-				*si4_arr++ = NEG_INF_SI4_m12;
-				continue;
-			}
+		} else if ((val -= (sf8) 0.5) < neg_inf) {
+			*si4_arr++ = NEG_INF_SI4_m12;
+			continue;
 		}
 		*si4_arr++ = (si4) val;
 	}
@@ -23046,11 +23151,14 @@ inline
 #endif
 void      CMP_sf8_to_si4_and_scale_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, sf8 scale)
 {
-	sf8	val;
+	sf8	val, pos_inf, neg_inf;
 	
 #ifdef FN_DEBUG_m12
 	G_message_m12("%s()\n", __FUNCTION__);
 #endif
+	
+	pos_inf = (sf8) POS_INF_SI4_m12;
+	neg_inf = (sf8) NEG_INF_SI4_m12;
 	
 	while (len--) {
 		val = *sf8_arr++ * scale;
@@ -23059,15 +23167,13 @@ void      CMP_sf8_to_si4_and_scale_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, sf8 
 			continue;
 		}
 		if (val >= (sf8) 0.0) {
-			if ((val += (sf8) 0.5) > (sf8) POS_INF_SI4_m12) {
+			if ((val += (sf8) 0.5) > pos_inf) {
 				*si4_arr++ = POS_INF_SI4_m12;
 				continue;
 			}
-		} else {
-			if ((val -= (sf8) 0.5) < (sf8) NEG_INF_SI4_m12) {
-				*si4_arr++ = NEG_INF_SI4_m12;
-				continue;
-			}
+		} else if ((val -= (sf8) 0.5) < neg_inf) {
+			*si4_arr++ = NEG_INF_SI4_m12;
+			continue;
 		}
 		*si4_arr++ = (si4) val;
 	}
@@ -23078,7 +23184,7 @@ void      CMP_sf8_to_si4_and_scale_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, sf8 
 
 void    CMP_show_block_header_m12(CMP_BLOCK_FIXED_HEADER_m12 *block_header)
 {
-	si1     hex_str[HEX_STRING_BYTES_m12(CRC_BYTES_m12)], time_str[TIME_STRING_BYTES_m12];
+	si1     hex_str[HEX_STRING_BYTES_m12(CRC_BYTES_m12)], time_str[TIME_STRING_BYTES_m12], bin_str[40];
 	ui4     i, mask;
 	
 #ifdef FN_DEBUG_m12
@@ -23098,7 +23204,8 @@ void    CMP_show_block_header_m12(CMP_BLOCK_FIXED_HEADER_m12 *block_header)
 		if (block_header->block_flags & mask)
 			printf_m12("%d ", i);
 	}
-	printf_m12(" (value: 0x%08x)\n", block_header->block_flags);
+	STR_binary_m12(bin_str, (void *) &block_header->block_flags, (size_t) 4, "-", FALSE_m12);
+	printf_m12(" (value: %s)\n", bin_str);
 	if (block_header->start_time == UUTC_NO_ENTRY_m12)
 		printf_m12("Start Time: no entry\n");
 	else {
@@ -23111,11 +23218,11 @@ void    CMP_show_block_header_m12(CMP_BLOCK_FIXED_HEADER_m12 *block_header)
 	printf_m12("Number of Records: %hu\n", block_header->number_of_records);
 	printf_m12("Record Region Bytes: %hu\n", block_header->record_region_bytes);
 	printf_m12("Parameter Flag Bits: ");
-	for (i = 0, mask = 1; i < 32; ++i, mask <<= 1) {
+	for (i = 0, mask = 1; i < 32; ++i, mask <<= 1)
 		if (block_header->parameter_flags & mask)
 			printf_m12("%d ", i);
-	}
-	printf_m12(" (value: 0x%08x)\n", block_header->parameter_flags);
+	STR_binary_m12(bin_str, (void *) &block_header->parameter_flags, (size_t) 4, "-", FALSE_m12);
+	printf_m12(" (value: %s)\n", bin_str);
 	printf_m12("Parameter Region Bytes: %hu\n", block_header->parameter_region_bytes);
 	printf_m12("Protected Region Bytes: %hu\n", block_header->protected_region_bytes);
 	printf_m12("Discretionary Region Bytes: %hu\n", block_header->discretionary_region_bytes);
@@ -25564,7 +25671,7 @@ DATA_MATRIX_m12 *DM_get_matrix_m12(DATA_MATRIX_m12 *matrix, SESSION_m12 *sess, T
 		return(NULL);
 
 	}
-	
+
 	// set slice parameters by extents limits
 	passed_slice_copy = *slice;  // passed slice not modified
 	req_slice = &passed_slice_copy;  // this slice may be modified
@@ -25572,13 +25679,17 @@ DATA_MATRIX_m12 *DM_get_matrix_m12(DATA_MATRIX_m12 *matrix, SESSION_m12 *sess, T
 	// change requested limits to time
 	if (req_slice->conditioned == FALSE_m12)
 		G_condition_time_slice_m12(req_slice);
+	if (req_slice->start_time == BEGINNING_OF_TIME_m12)
+		req_slice->start_time = globals_m12->session_start_time;
+	if (req_slice->end_time == END_OF_TIME_m12)
+		req_slice->end_time = globals_m12->session_end_time;
 	if (search_mode == TIME_SEARCH_m12)
 		req_samp_secs = (sf8) TIME_SLICE_DURATION_m12(req_slice) / (sf8) 1000000.0;  // requested time in seconds
 	else  // search_mode == SAMPLE_SEARCH_m12
 		req_num_samps = TIME_SLICE_SAMPLE_COUNT_m12(req_slice);  // requested samples read (on reference channel)
 	seg_idx = G_get_segment_index_m12(FIRST_OPEN_SEGMENT_m12);
 	ref_samp_freq = ref_chan->segments[seg_idx]->metadata_fps->metadata->time_series_section_2.sampling_frequency;  // use first open segment so don't require ephemeral metadata
-	
+
 	// change all limits to time
 	changed_to_absolute_time = FALSE_m12;
 	padding_required = FALSE_m12;
@@ -25859,12 +25970,16 @@ DATA_MATRIX_m12 *DM_get_matrix_m12(DATA_MATRIX_m12 *matrix, SESSION_m12 *sess, T
 				matrix->contigua[i].start_sample_number = samp_offset;
 				duration = (sf8) ((matrix->contigua[i].end_time - matrix->contigua[i].start_time) + 1);
 				samp_offset += (si8) round(duration * tmp_sf8);
-				matrix->contigua[i].end_sample_number = samp_offset;
-				if (matrix->contigua[i].end_sample_number > matrix->contigua[i].start_sample_number)
-					--matrix->contigua[i].end_sample_number;
 			}
-			matrix->contigua[matrix->number_of_contigua - 1].end_sample_number = matrix->sample_count - 1;
+			for (i = 0; i < (matrix->number_of_contigua - 1); ++i) {
+				matrix->contigua[i].end_sample_number = matrix->contigua[i + 1].start_sample_number - 1;
+				if (matrix->contigua[i].end_sample_number < matrix->contigua[i].start_sample_number)  // can happen if highly decimated
+					matrix->contigua[i].end_sample_number = matrix->contigua[i].start_sample_number;
+			}
 		}
+		// compensate for rounding errors
+		matrix->contigua[0].start_sample_number = 0;
+		matrix->contigua[matrix->number_of_contigua - 1].end_sample_number = matrix->sample_count - 1;
 	}
 
 	// wait for channel threads
@@ -26568,7 +26683,7 @@ si4	FILT_butter_m12(FILT_PROCESSING_STRUCT_m12 *filtps)
 			break;
 		default:
 			if (!(filtps->behavior_on_fail & SUPPRESS_ERROR_OUTPUT_m12))
-				G_error_message_m12("%s(): nrecognized filter type: %d \n", __FUNCTION__, filtps->type);
+				G_error_message_m12("%s(): unrecognized filter type: %d \n", __FUNCTION__, filtps->type);
 			if (filtps->behavior_on_fail & EXIT_ON_FAIL_m12)
 				exit_m12(1);
 			return(-1);
@@ -33330,7 +33445,7 @@ inline
 #endif
 si4	PROC_pthread_mutex_trylock_m12(pthread_mutex_t_m12 *mutex)
 {
-	// Non-blocking version of PROC_pthread_mutex_lock_m13()
+	// Non-blocking version of PROC_pthread_mutex_lock_m12()
 	// If the mutex is valid & unlocked: locks the mutex & will returns zero
 	// If the mutex is valid & locked: returns EBUSY
 	// If the mutex is invalid: returns EINVAL
@@ -36384,7 +36499,7 @@ si1	*STR_binary_m12(si1 *str, void *num_ptr, size_t num_bytes, si1 *byte_separat
 	// pass NULL or "" for byte_separator for no separation between bytes
 	// prefix will prepend string with "0b"
 
-	if (byte_separator) {
+	if (G_empty_string_m12(byte_separator) == FALSE_m12) {
 		for (c = byte_separator - 1; *++c;);
 		sep_len = (c - byte_separator);
 	} else {
@@ -36402,6 +36517,8 @@ si1	*STR_binary_m12(si1 *str, void *num_ptr, size_t num_bytes, si1 *byte_separat
 	if (prefix == TRUE_m12) {
 		*c++ = '0';
 		*c++ = 'b';
+		if (sep_len)
+			for (c2 = byte_separator; *c2; *c++ = *c2++);
 	}
 	
 	num = (ui1 *) num_ptr + (num_bytes - 1);
@@ -37224,7 +37341,6 @@ const si1	*STR_tern_m12(TERN_m12 val)
 si1	*STR_time_string_m12(si8 uutc, si1 *time_str, TERN_m12 fixed_width, TERN_m12 relative_days, si4 colored_text, ...)  // time_str buffer sould be of length TIME_STRING_BYTES_m12
 {
 	si1			*standard_timezone_acronym, *standard_timezone_string, *date_color, *time_color, *color_reset, *meridian;
-	static si1      	private_time_str[TIME_STRING_BYTES_m12];
 	const si1      		*mos[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
 	const si1		*months[12] = { "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December" };
 	const si1		*wdays[7] = { "Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat" };
@@ -37243,9 +37359,12 @@ si1	*STR_time_string_m12(si8 uutc, si1 *time_str, TERN_m12 fixed_width, TERN_m12
 	G_message_m12("%s()\n", __FUNCTION__);
 #endif
 	
-	// Note if NULL is passed for time_str, this function is not thread-safe
-	if (time_str == NULL)
-		time_str = private_time_str;
+	// Note if time_str is NULL it is allocated & caller is responsible for freeing
+	if (time_str == NULL) {
+		time_str = malloc_m12((size_t) TIME_STRING_BYTES_m12, __FUNCTION__, USE_GLOBAL_BEHAVIOR_m12);
+		if (time_str == NULL)
+			return(NULL);
+	}
 	
 	switch (uutc) {
 		case UUTC_NO_ENTRY_m12:
@@ -37638,17 +37757,8 @@ TERN_m12	TR_bind_m12(TR_INFO_m12 *trans_info, si1 *iface_addr, ui2 iface_port)
 	sock_fd = trans_info->sock_fd;
 
 	// set socket reuse address option
-	#if defined MACOS_m12 || defined LINUX_m12
-	si4	flags;
-	#endif
-	#ifdef WINDOWS_m12
-	si1	flags;
-	#endif
-	flags = 1;
-	if (setsockopt(sock_fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags)) == -1) {
-		G_warning_message_m12("%s: socket option error\n", __FUNCTION__);
+	if (TR_set_socket_reuse_address_m12(trans_info, TRUE_m12) == FALSE_m12)
 		return(FALSE_m12);
-	}
 
 	// set socket info
 	si_len = sizeof(struct sockaddr_in);
@@ -37780,6 +37890,10 @@ void	TR_close_transmission_m12(TR_INFO_m12 *trans_info)
 	G_message_m12("%s()\n", __FUNCTION__);
 #endif
 	
+	trans_info->mode = TR_MODE_NONE_m12;  // reset mode
+	trans_info->header->flags &= ~TR_FLAGS_CLOSE_m12;  // reset close flag if set
+	if (trans_info->sock_fd == -1)
+		return;
 
 #if defined MACOS_m12 || defined LINUX_m12
 	if (trans_info->mode == TR_MODE_FORCE_CLOSE_m12)
@@ -37791,9 +37905,8 @@ void	TR_close_transmission_m12(TR_INFO_m12 *trans_info)
 		shutdown(trans_info->sock_fd, SD_BOTH);
 	closesocket(trans_info->sock_fd);
 #endif
+	
 	trans_info->sock_fd = -1;
-	trans_info->mode = TR_MODE_NONE_m12;
-	trans_info->header->flags &= ~TR_FLAGS_CLOSE_m12;  // reset close flag if set
 
 	return;
 }
@@ -37865,7 +37978,7 @@ TERN_m12	TR_connect_m12(TR_INFO_m12 *trans_info, si1 *dest_addr, ui2 dest_port)
 			else
 				timeout_ms = 5;  // default to 5 second timeout
 
-			// use poll() because socket fd's often exceed set size limit (1024) of select()
+			// use poll() because socket fd's often exceed set size limit of select() (1024)
 #if defined MACOS_m12 || defined LINUX_m12
 			memset((void *) &fds, 0, sizeof(struct pollfd));
 #endif
@@ -37974,7 +38087,8 @@ void	TR_free_transmission_info_m12(TR_INFO_m12 **trans_info_ptr, TERN_m12 free_s
 		return;
 	}
 	
-	TR_close_transmission_m12(trans_info);
+	if (trans_info->sock_fd != -1)
+		TR_close_transmission_m12(trans_info);
 
 	if (trans_info->buffer)
 		free_m12((void *) trans_info->buffer, __FUNCTION__);
@@ -38479,6 +38593,10 @@ TR_SEND_FAIL_m12:
 
 TERN_m12	TR_set_socket_blocking_m12(TR_INFO_m12 *trans_info, TERN_m12 blocking)
 {
+#ifdef FN_DEBUG_m12
+	G_message_m12("%s()\n", __FUNCTION__);
+#endif
+	
 #if defined MACOS_m12 || defined LINUX_m12
 	TERN_m12	current_state;
 	si4		socket_flags;
@@ -38555,8 +38673,113 @@ TERN_m12	TR_set_socket_blocking_m12(TR_INFO_m12 *trans_info, TERN_m12 blocking)
 }
 
 
+TERN_m12	TR_set_socket_broadcast_m12(TR_INFO_m12 *trans_info, TERN_m12 set)
+{
+#if defined MACOS_m12 || defined LINUX_m12
+	si4	flags;
+#endif
+#ifdef WINDOWS_m12
+	si1	flags;
+#endif
+	
+#ifdef FN_DEBUG_m12
+	G_message_m12("%s()\n", __FUNCTION__);
+#endif
+	
+	// set socket reuse address option
+	// pass TRUE_m12 to set FALSE_m12 to unset
+	
+	if (set == TRUE_m12)
+		flags = 1;
+	else
+		flags = 0;
+	if (setsockopt(trans_info->sock_fd, SOL_SOCKET, SO_BROADCAST, &flags, sizeof(flags)) == -1) {
+		G_warning_message_m12("%s(): socket option error\n", __FUNCTION__);
+		return(FALSE_m12);
+	}
+	
+	return(TRUE_m12);
+}
+
+
+TERN_m12	TR_set_socket_reuse_address_m12(TR_INFO_m12 *trans_info, TERN_m12 set)
+{
+#if defined MACOS_m12 || defined LINUX_m12
+	si4	flags;
+#endif
+#ifdef WINDOWS_m12
+	si1	flags;
+#endif
+	
+#ifdef FN_DEBUG_m12
+	G_message_m12("%s()\n", __FUNCTION__);
+#endif
+	
+	// set socket reuse address option
+	// pass TRUE_m12 to set FALSE_m12 to unset
+	
+	if (set == TRUE_m12)
+		flags = 1;
+	else
+		flags = 0;
+	if (setsockopt(trans_info->sock_fd, SOL_SOCKET, SO_REUSEADDR, &flags, sizeof(flags)) == -1) {
+		G_warning_message_m12("%s(): socket option error\n", __FUNCTION__);
+		return(FALSE_m12);
+	}
+	
+	return(TRUE_m12);
+}
+
+
+TERN_m12	TR_set_socket_reuse_port_m12(TR_INFO_m12 *trans_info, TERN_m12 set)
+{
+#ifdef FN_DEBUG_m12
+	G_message_m12("%s()\n", __FUNCTION__);
+#endif
+
+	// set socket reuse port option
+	// pass TRUE_m12 to set FALSE_m12 to unset
+
+#ifdef SO_REUSEPORT
+	#if defined MACOS_m12 || defined LINUX_m12
+		si4	flags;
+	#endif
+	#ifdef WINDOWS_m12
+		si1	flags;
+	#endif	
+
+	// Notes:
+	//	SO_REUSEPORT available on Linux since version 3.9
+	//	Permits multiple AF_INET or AF_INET6 sockets to be bound to an
+	//	identical socket address.  This option must be set on each
+	//	socket (including the first socket) prior to calling bind()
+	//	on the socket.  To prevent port hijacking, all of the
+	//	processes binding to the same address must have the same
+	//	effective UID.  This option can be employed with both TCP and
+	//	UDP sockets.
+	
+	if (set == TRUE_m12)
+		flags = 1;
+	else
+		flags = 0;
+	if (setsockopt(trans_info->sock_fd, SOL_SOCKET, SO_REUSEPORT, &flags, sizeof(flags)) == -1) {
+		G_warning_message_m12("%s(): socket option error\n", __FUNCTION__);
+		return(FALSE_m12);
+	}
+	
+	return(TRUE_m12);
+#else
+	return(UNKNOWN_m12);
+#endif
+}
+
+
 void	TR_set_socket_timeout_m12(TR_INFO_m12 *trans_info)
 {
+#ifdef FN_DEBUG_m12
+	G_message_m12("%s()\n", __FUNCTION__);
+#endif
+	
 #if defined MACOS_m12 || defined LINUX_m12
 	struct timeval	tv;
 	

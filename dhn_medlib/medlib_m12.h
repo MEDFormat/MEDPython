@@ -285,7 +285,7 @@ typedef struct {
 		si8     end_frame_number;	// session-relative (global indexing) (FRAME_NUMBER_NO_ENTRY_m12 for variable frequency, session level entries)
 	};
 	si4     segment_number;
-	si4     acquisition_channel_number;  // REC_Sgmt_v11_ACQUISITION_CHANNEL_NUMBER_ALL_CHANNELS_m13 in session level records
+	si4     acquisition_channel_number;  // REC_Sgmt_v11_ACQUISITION_CHANNEL_NUMBER_ALL_CHANNELS_m12 in session level records
 } REC_Sgmt_v11_m12;
 
 // Description follows acquisition_channel_number in structure.
@@ -2468,10 +2468,10 @@ CHANNEL_m12	*G_open_channel_nt_m12(CHANNEL_m12 *chan, TIME_SLICE_m12 *slice, si1
 pthread_rval_m12	G_open_channel_thread_m12(void *ptr);
 SEGMENT_m12	*G_open_segment_m12(SEGMENT_m12 *seg, TIME_SLICE_m12 *slice, si1 *segment_path, ui8 flags, si1 *password);
 pthread_rval_m12	G_open_segment_thread_m12(void *ptr);
-TERN_m12	G_open_segmented_session_records(SESSION_m12 *sess);
+TERN_m12	G_open_segmented_session_records_m12(SESSION_m12 *sess);
 SESSION_m12	*G_open_session_m12(SESSION_m12 *sess, TIME_SLICE_m12 *slice, void *file_list, si4 list_len, ui8 flags, si1 *password);
 SESSION_m12	*G_open_session_nt_m12(SESSION_m12 *sess, TIME_SLICE_m12 *slice, void *file_list, si4 list_len, ui8 flags, si1 *password);  // "nt" == not threaded
-TERN_m12	G_open_session_records(SESSION_m12 *sess);
+TERN_m12	G_open_session_records_m12(SESSION_m12 *sess);
 si8             G_pad_m12(ui1 *buffer, si8 content_len, ui4 alignment);
 TERN_m12	G_path_from_root_m12(si1 *path, si1 *root_path);
 void            G_pop_behavior_m12(void);
@@ -3349,6 +3349,8 @@ si4     	CMP_round_si4_m12(sf8 val);
 void    	CMP_scale_amplitude_si4_m12(si4 *input_buffer, si4 *output_buffer, si8 len, sf8 scale_factor, CMP_PROCESSING_STRUCT_m12 *cps);
 void    	CMP_scale_frequency_si4_m12(si4 *input_buffer, si4 *output_buffer, si8 len, sf8 scale_factor, CMP_PROCESSING_STRUCT_m12 *cps);
 void    	CMP_set_variable_region_m12(CMP_PROCESSING_STRUCT_m12 *cps);
+void      	CMP_sf8_to_si2_m12(sf8 *sf8_arr, si2 *si2_arr, si8 len, TERN_m12 round);
+void      	CMP_sf8_to_sf4_m12(sf8 *sf8_arr, sf4 *sf4_arr, si8 len, TERN_m12 round);
 void      	CMP_sf8_to_si4_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, TERN_m12 round);
 void      	CMP_sf8_to_si4_and_scale_m12(sf8 *sf8_arr, si4 *si4_arr, si8 len, sf8 scale);
 void    	CMP_show_block_header_m12(CMP_BLOCK_FIXED_HEADER_m12 *block_header);
@@ -3707,8 +3709,7 @@ void		SHA_update_m12(SHA_CTX_m12 *ctx, const ui1 *data, si8 len);
 
 // Macros
 #define FILT_ABS_m12(x)             		((x) >= ((sf8) 0.0) ? (x) : (-x))
-#define FILT_SIGN_m12(x, y)         		((y) >= ((sf8) 0.0) ? FILT_ABS_m12(x) : -FILT_ABS_m12(x))
-// filtps->n_poles = poles = n_fcs * order;
+#define FILT_SIGN_m12(x, y)         		((y) >= ((sf8) 0.0) ? FILT_ABS_m12(x) : -FILT_ABS_m12(x))  // y = abs(x)
 #define FILT_POLES_m12(order, cutoffs)		(order * cutoffs)
 #define FILT_FILT_PAD_SAMPLES_m12(poles)	(poles * FILT_PAD_SAMPLES_PER_POLE_m12 * 2)
 #define FILT_OFFSET_ORIG_DATA_m12(filtps)	(filtps->filt_data + (filtps->n_poles * FILT_PAD_SAMPLES_PER_POLE_m12))
@@ -4123,6 +4124,9 @@ si8		TR_recv_transmission_m12(TR_INFO_m12 *trans_info, TR_HEADER_m12 **caller_he
 TERN_m12	TR_send_message_m12(TR_INFO_m12 *trans_info, ui1 type, TERN_m12 encrypt, si1 *fmt, ...);
 si8		TR_send_transmission_m12(TR_INFO_m12 *trans_info);
 TERN_m12	TR_set_socket_blocking_m12(TR_INFO_m12 *trans_info, TERN_m12 blocking);
+TERN_m12	TR_set_socket_broadcast_m12(TR_INFO_m12 *trans_info, TERN_m12 set);
+TERN_m12	TR_set_socket_reuse_address_m12(TR_INFO_m12 *trans_info, TERN_m12 set);
+TERN_m12	TR_set_socket_reuse_port_m12(TR_INFO_m12 *trans_info, TERN_m12 set);
 void		TR_set_socket_timeout_m12(TR_INFO_m12 *trans_info);
 TERN_m12	TR_show_message_m12(TR_HEADER_m12 *header);
 void		TR_show_transmission_m12(TR_INFO_m12 *trans_info);
