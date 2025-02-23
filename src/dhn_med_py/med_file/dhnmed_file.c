@@ -2748,13 +2748,7 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
     G_initialize_time_slice_m12(slice);
     initialize_time_slice(slice, start_index_input_obj, end_index_input_obj, start_time_input_obj, end_time_input_obj);
 //    G_show_time_slice_m12(slice);
-    
-    // set flags to only get records
-    //flags = LH_READ_SLICE_SESSION_RECORDS_m12 | LH_READ_SLICE_SEGMENTED_SESS_RECS_m12 | LH_MAP_ALL_SEGMENTS_m12;
-    ui8 new_flags;
-    new_flags = LH_READ_SLICE_ALL_RECORDS_m12 | LH_GENERATE_EPHEMERAL_DATA_m12;
-    G_propogate_flags_m12((LEVEL_HEADER_m12 *) sess, new_flags);
-    //G_read_session_m12(sess, sess_slice, NULL, 0, flags, NULL);
+
     G_read_session_m12(sess, slice);
 
     // session records
