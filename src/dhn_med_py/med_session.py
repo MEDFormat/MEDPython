@@ -722,9 +722,8 @@ class MedSession:
 
             # Make sure the data is in requested channels order
             if type(channels) is list:
-                channel_indices = [channel_names.index(x) for x in channels]
-                reordered_pos = sorted(range(len(channel_indices)), key=lambda x: channel_indices[x])
-                data = [data[i] for i in reordered_pos]
+                channel_indices = [channel_names.index(ch) for ch in channels]
+                data = [data[i] for i in channel_indices]
 
             self.set_channel_active(channel_names, False)
             self.set_channel_active(curr_active_channels, True)
@@ -801,9 +800,8 @@ class MedSession:
 
             # Make sure the data is in requested channels order
             if type(channels) is list:
-                channel_indices = [channel_names.index(x) for x in channels]
-                reordered_pos = sorted(range(len(channel_indices)), key=lambda x: channel_indices[x])
-                data = [data[i] for i in reordered_pos]
+                channel_indices = [channel_names.index(ch) for ch in channels]
+                data = [data[i] for i in channel_indices]
 
             self.set_channel_active(channel_names, False)
             self.set_channel_active(curr_active_channels, True)

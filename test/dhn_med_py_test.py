@@ -19,7 +19,7 @@ United States
 """
 
 # Standard library imports
-import unittest
+import unittest, random
 
 # Third party imports
 import numpy as np
@@ -261,12 +261,16 @@ class DhnMedPyTest(unittest.TestCase):
         assert len(data) == len(channel_names)
         assert len(data[ref_index]) == int(10 * chan_fs)
 
-        # Read by index reverted order channels specified
-        rev_data = ms.read_by_index(0, int(10*chan_fs), channel_names[::-1])
+        # Read by index mixed order channels specified
+        mixed_order = channel_names.copy()
+        random.shuffle(mixed_order)
+
+        rev_data = ms.read_by_index(0, int(10*chan_fs), mixed_order)
 
         assert len(rev_data) == len(channel_names)
-        assert len(rev_data[-1]) == len(data[0])
-        np.testing.assert_array_equal(rev_data[-1], data[0])
+        for i, ch in enumerate(mixed_order):
+            ch_idx = channel_names.index(ch)
+            np.testing.assert_array_equal(rev_data[i], data[ch_idx])
 
         # Read by index - no channels specified
         data = ms.read_by_index(0, int(10*chan_fs), None)
@@ -302,12 +306,16 @@ class DhnMedPyTest(unittest.TestCase):
         assert len(data) == len(channel_names)
         assert len(data[ref_index]) == int(10 * ref_fs) + 5 # TODO: why +5?
 
-        # Read by time reverted order channels specified
-        rev_data = ms.read_by_time(start_time, start_time + 10 * 1000000, channel_names[::-1])
+        # Read by time mixed order channels specified
+        mixed_order = channel_names.copy()
+        random.shuffle(mixed_order)
+
+        rev_data = ms.read_by_time(start_time, start_time + 10 * 1000000, mixed_order)
 
         assert len(rev_data) == len(channel_names)
-        assert len(rev_data[-1]) == len(data[0])
-        np.testing.assert_array_equal(rev_data[-1], data[0])
+        for i, ch in enumerate(mixed_order):
+            ch_idx = channel_names.index(ch)
+            np.testing.assert_array_equal(rev_data[i], data[ch_idx])
 
         # Read by time - no channels specified
         data = ms.read_by_time(start_time, start_time + 10 * 1000000)
