@@ -723,7 +723,10 @@ class MedSession:
             # Make sure the data is in requested channels order
             if type(channels) is list:
                 channel_indices = [channel_names.index(ch) for ch in channels]
-                data = [data[i] for i in channel_indices]
+                sorted_vals = sorted(set(channel_indices))
+                rank_map = {val: rank for rank, val in enumerate(sorted_vals)}
+                ranked_indices = [rank_map[i] for i in channel_indices]
+                data = [data[i] for i in ranked_indices]
 
             self.set_channel_active(channel_names, False)
             self.set_channel_active(curr_active_channels, True)
@@ -801,7 +804,10 @@ class MedSession:
             # Make sure the data is in requested channels order
             if type(channels) is list:
                 channel_indices = [channel_names.index(ch) for ch in channels]
-                data = [data[i] for i in channel_indices]
+                sorted_vals = sorted(set(channel_indices))
+                rank_map = {val: rank for rank, val in enumerate(sorted_vals)}
+                ranked_indices = [rank_map[i] for i in channel_indices]
+                data = [data[i] for i in ranked_indices]
 
             self.set_channel_active(channel_names, False)
             self.set_channel_active(curr_active_channels, True)

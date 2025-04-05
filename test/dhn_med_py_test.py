@@ -262,12 +262,14 @@ class DhnMedPyTest(unittest.TestCase):
         assert len(data[ref_index]) == int(10 * chan_fs)
 
         # Read by index mixed order channels specified
-        mixed_order = channel_names.copy()
+        left_out_channels = channel_names.copy()
+        left_out_channels.pop(channel_names.index('16k_0001'))
+        mixed_order = left_out_channels.copy()
         random.shuffle(mixed_order)
 
         rev_data = ms.read_by_index(0, int(10*chan_fs), mixed_order)
 
-        assert len(rev_data) == len(channel_names)
+        assert len(rev_data) == len(left_out_channels)
         for i, ch in enumerate(mixed_order):
             ch_idx = channel_names.index(ch)
             np.testing.assert_array_equal(rev_data[i], data[ch_idx])
@@ -307,12 +309,14 @@ class DhnMedPyTest(unittest.TestCase):
         assert len(data[ref_index]) == int(10 * ref_fs) + 5 # TODO: why +5?
 
         # Read by time mixed order channels specified
-        mixed_order = channel_names.copy()
+        left_out_channels = channel_names.copy()
+        left_out_channels.pop(channel_names.index('16k_0001'))
+        mixed_order = left_out_channels.copy()
         random.shuffle(mixed_order)
 
         rev_data = ms.read_by_time(start_time, start_time + 10 * 1000000, mixed_order)
 
-        assert len(rev_data) == len(channel_names)
+        assert len(rev_data) == len(left_out_channels)
         for i, ch in enumerate(mixed_order):
             ch_idx = channel_names.index(ch)
             np.testing.assert_array_equal(rev_data[i], data[ch_idx])
