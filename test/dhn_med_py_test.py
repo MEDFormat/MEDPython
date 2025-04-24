@@ -217,16 +217,16 @@ class DhnMedPyTest(unittest.TestCase):
         # Nothing specified - time (i.e. read whole recording)
         dm.major_dimension = 'channel'
 
-        # channel_names = ms.get_channel_names()
-        # ms.set_channel_active(channel_names, False)
-        # ms.set_channel_active(channel_names[0], True)
-        # print("Reading data")
-        # matrix_result = dm.get_matrix_by_time(None, None, None, 5000)
-        #
-        # print(matrix_result['samples'].shape)
-        #
-        # assert matrix_result['samples'].shape[0] == 4
-        # assert matrix_result['samples'].shape[1] == 5000
+        channel_names = ms.get_channel_names()
+        ms.set_channel_active(channel_names, False)
+        ms.set_channel_active(channel_names[0], True)
+        print("Reading data")
+        matrix_result = dm.get_matrix_by_time(None, None, None, 5000)
+
+        print(matrix_result['samples'].shape)
+
+        assert matrix_result['samples'].shape[0] == 1
+        assert matrix_result['samples'].shape[1] == 5000
 
         # ms.close()
 
