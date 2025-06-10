@@ -955,7 +955,7 @@ class MedSession:
     
         return get_globals_number_of_session_samples(self.__sess_capsule)
         
-    def find_discontinuities(self, channel_name=None):
+    def get_discontinuities(self, channel_name=None):
         """
         This function returns a contigua (list of continuous data ranges).
         Each continuous range dictionary has the following elements:
@@ -966,13 +966,14 @@ class MedSession:
             end_time
         
         The sample numbers are determined by which channel is being used as
-        the reference channel.  The reference channel ,which should be explicitly
-        set prior to calling this function, can be set with the
-        set_reference_channel() function.
+        the reference channel. The reference channel, which should be explicitly
+        set before calling this function, can be set with the
+        set_reference_channel() function. The channel name can also be
+        provided as a parameter.
         
         Parameters
         ---------
-        None
+        channel_name: str, or None
         
         Returns
         -------
