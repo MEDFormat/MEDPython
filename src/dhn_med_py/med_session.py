@@ -505,11 +505,6 @@ class MedSession:
         
     class InvalidArgumentException(Exception):
         pass
-    
-    __sess_capsule = None
-
-    data_matrix = None
-
 
 
     def __init__(self, session_path, password=None, reference_channel=None):
