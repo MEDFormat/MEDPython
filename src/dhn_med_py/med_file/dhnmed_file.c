@@ -1013,19 +1013,6 @@ PyObject*    fill_metadata(LEVEL_HEADER_m12 *level_header, TIME_SLICE_m12 *slice
 
         case LH_TIME_SERIES_CHANNEL_m12:
 
-            // Collect segment information
-            printf("\n[DEBUG] NUmber of session segments %ld", globals_m12->number_of_session_segments);
-//            seg = chan->segments[globals_m12->number_of_session_segments-1];
-            if (Sgmt_records != NULL){
-                printf("\nRecords not are null");
-                tmp_mxa_start = Sgmt_records[0].start_sample_number;
-            }
-            fflush(stdout);
-//            printf("\n[DEBUG] NUmber of samples %ld", Sgmt_records[globals_m12->number_of_session_segments-1].end_sample_number+1);
-//            chan->Sgmt_records[ - 1].end_sample_number + 1;
-
-
-
             metadata_fps = chan->metadata_fps;
             uh = metadata_fps->universal_header;
             tmd2 = &metadata_fps->metadata->time_series_section_2;
