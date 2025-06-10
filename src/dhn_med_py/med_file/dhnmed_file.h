@@ -40,7 +40,7 @@ static char pymed_file_docstring[] =
 
 
 static PyObject     *read_MED_exec(SESSION_m12 *sess, si4 n_files, si8 start_time, si8 end_time, si8 start_idx, si8 end_idx, si1 *password, si1 *ref_chan, TERN_m12 samples_as_singles);
-PyObject*    fill_metadata(FILE_PROCESSING_STRUCT_m12 *metadata_fps, TIME_SLICE_m12 *slice);
+PyObject*    fill_metadata(LEVEL_HEADER_m12 *level_header, TIME_SLICE_m12 *slice);
 PyObject*   build_contigua(CHANNEL_m12 *chan, si8 start_time, si8 end_time);
 PyObject*    fill_session_records(SESSION_m12 *sess,  DATA_MATRIX_m12 *dm);
 PyObject*    fill_record(RECORD_HEADER_m12 *rh);

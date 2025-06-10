@@ -524,9 +524,9 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
         chan_tmd2 = &chan->metadata_fps->metadata->time_series_section_2;
         
         //chan_tmd2->absolute_start_sample_number = chan_slice->start_sample_number;
-        //chan_tmd2->number_of_samples = TIME_SLICE_SAMPLE_COUNT_m12(chan_slice);
-        //printf("DEBUG: %ld\n", chan_tmd2->number_of_samples);
-        py_channel_metadata = fill_metadata(chan->metadata_fps, chan_slice);
+//        chan_tmd2->number_of_samples = TIME_SLICE_SAMPLE_COUNT_m12(chan_slice);
+//        printf("DEBUG: %ld\n", chan_tmd2->number_of_samples);
+        py_channel_metadata = fill_metadata((LEVEL_HEADER_m12 *) chan, chan_slice);
        
         py_channel = Py_BuildValue("{s:O}", "metadata", py_channel_metadata);
         
@@ -539,7 +539,7 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
 
     //printf("got here pre-metadata\n");
     // session metadata
-    py_metadata = fill_metadata(sess->time_series_metadata_fps, &sess->time_slice);
+    py_metadata = fill_metadata((LEVEL_HEADER_m12 *) sess, &sess->time_slice);
     //printf("got here post-metadata\n");
     
     py_password_hints = Py_BuildValue("{s:s,s:s}", "level_1", check_utf8(globals_m12->password_data.level_1_password_hint), "level_2", check_utf8(globals_m12->password_data.level_2_password_hint));
@@ -918,66 +918,171 @@ PyObject*   build_contigua(CHANNEL_m12 *chan, si8 start_time, si8 end_time)
 }
 
 
-PyObject*    fill_metadata(FILE_PROCESSING_STRUCT_m12 *metadata_fps, TIME_SLICE_m12 *slice)
+//PyObject*    fill_metadata(FILE_PROCESSING_STRUCT_m12 *metadata_fps, TIME_SLICE_m12 *slice)
+PyObject*    fill_metadata(LEVEL_HEADER_m12 *level_header, TIME_SLICE_m12 *slice)
 {
-    extern GLOBALS_m12            *globals_m12;
+    extern GLOBALS_m12                      *globals_m12;
     si1                                     time_str_start_time[TIME_STRING_BYTES_m12], time_str_end_time[TIME_STRING_BYTES_m12],
     time_str_session_start_time[TIME_STRING_BYTES_m12], time_str_session_end_time[TIME_STRING_BYTES_m12];
     si1                                     path[FULL_FILE_NAME_BYTES_m12];
+    SESSION_m12                             *sess;
+    Sgmt_RECORD_m12                         *Sgmt_records;
+    CHANNEL_m12                             *chan;
+    SEGMENT_m12                             *seg;
+    FILE_PROCESSING_STRUCT_m12              *metadata_fps;
     UNIVERSAL_HEADER_m12                    *uh;
     TIME_SERIES_METADATA_SECTION_2_m12      *tmd2;
     METADATA_SECTION_3_m12                  *md3;
     si8                                     tmp_mxa_start, tmp_mxa_end;
-    sf8                                         tmp_mxa_samp_freq;
+    sf8                                     tmp_mxa_samp_freq;
     PyObject                                *py_metadata;
     
+    switch (level_header->type_code) {
+		case LH_SESSION_m12:
+			sess = (SESSION_m12 *) level_header;
+			chan = globals_m12->reference_channel;
+			if (chan == NULL)
+				chan = G_change_reference_channel_m12(sess, NULL, NULL, DEFAULT_CHANNEL_m12);
+			Sgmt_records = sess->Sgmt_records;
+			break;
+		case LH_TIME_SERIES_CHANNEL_m12:
+		    chan = (CHANNEL_m12 *) level_header;
+			sess = (SESSION_m12 *) chan->parent;
+			Sgmt_records = chan->Sgmt_records;
+		case LH_VIDEO_CHANNEL_m12:
+			chan = (CHANNEL_m12 *) level_header;
+			sess = (SESSION_m12 *) chan->parent;
+			Sgmt_records = chan->Sgmt_records;
+			break;
+		default:
+			G_error_message_m12("%s(): invalid level\n", __FUNCTION__);
+			return(0);
+	}
 
-    uh = metadata_fps->universal_header;
-    tmd2 = &metadata_fps->metadata->time_series_section_2;
-    md3 = &metadata_fps->metadata->section_3;
-    //printf("%s\n", metadata_fps->full_file_name);
-    G_extract_path_parts_m12(metadata_fps->full_file_name, path, NULL, NULL);
-    // start time string
-    if (globals_m12->RTO_known == TRUE_m12)
-        STR_time_string_m12(slice->start_time, time_str_start_time, TRUE_m12, FALSE_m12, FALSE_m12);
-    else
-        STR_time_string_m12(slice->start_time, time_str_start_time, TRUE_m12, TRUE_m12, FALSE_m12);
-    
-    // end time string
-    if (globals_m12->RTO_known == TRUE_m12)
-        STR_time_string_m12(slice->end_time, time_str_end_time, TRUE_m12, FALSE_m12, FALSE_m12);
-    else
-        STR_time_string_m12(slice->end_time, time_str_end_time, TRUE_m12, TRUE_m12, FALSE_m12);
-    
-    // session start time string
-    if (globals_m12->RTO_known == TRUE_m12)
-        STR_time_string_m12(globals_m12->session_start_time, time_str_session_start_time, TRUE_m12, FALSE_m12, FALSE_m12);
-    else
-        STR_time_string_m12(globals_m12->session_start_time, time_str_session_start_time, TRUE_m12, TRUE_m12, FALSE_m12);
-    
-    // session end time string
-    if (globals_m12->RTO_known == TRUE_m12)
-        STR_time_string_m12(globals_m12->session_end_time, time_str_session_end_time, TRUE_m12, FALSE_m12, FALSE_m12);
-    else
-        STR_time_string_m12(globals_m12->session_end_time, time_str_session_end_time, TRUE_m12, TRUE_m12, FALSE_m12);
+    switch (level_header->type_code) {
 
-    // absolute start sample number
-    if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m12)
-        tmp_mxa_start = -1;  // convert to one-based indexing
-    else
-        tmp_mxa_start = slice->start_sample_number;
-    
-    // absolute end sample number
-    if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m12)
-        tmp_mxa_end = -1;
-    else
-        tmp_mxa_end = slice->end_sample_number + 1;  // end is exclusive in python, but inclusive in slice
-    
-    // sampling frequency
-    if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m12)
-        tmp_mxa_samp_freq = -1;
-    else
-        tmp_mxa_samp_freq = tmd2->sampling_frequency;
+        case LH_SESSION_m12:
+
+            metadata_fps = sess->time_series_metadata_fps;
+            uh = metadata_fps->universal_header;
+            tmd2 = &metadata_fps->metadata->time_series_section_2;
+            md3 = &metadata_fps->metadata->section_3;
+            //printf("%s\n", metadata_fps->full_file_name);
+            G_extract_path_parts_m12(metadata_fps->full_file_name, path, NULL, NULL);
+            // start time string
+            if (globals_m12->RTO_known == TRUE_m12)
+                STR_time_string_m12(slice->start_time, time_str_start_time, TRUE_m12, FALSE_m12, FALSE_m12);
+            else
+                STR_time_string_m12(slice->start_time, time_str_start_time, TRUE_m12, TRUE_m12, FALSE_m12);
+
+            // end time string
+            if (globals_m12->RTO_known == TRUE_m12)
+                STR_time_string_m12(slice->end_time, time_str_end_time, TRUE_m12, FALSE_m12, FALSE_m12);
+            else
+                STR_time_string_m12(slice->end_time, time_str_end_time, TRUE_m12, TRUE_m12, FALSE_m12);
+
+            // session start time string
+            if (globals_m12->RTO_known == TRUE_m12)
+                STR_time_string_m12(globals_m12->session_start_time, time_str_session_start_time, TRUE_m12, FALSE_m12, FALSE_m12);
+            else
+                STR_time_string_m12(globals_m12->session_start_time, time_str_session_start_time, TRUE_m12, TRUE_m12, FALSE_m12);
+
+            // session end time string
+            if (globals_m12->RTO_known == TRUE_m12)
+                STR_time_string_m12(globals_m12->session_end_time, time_str_session_end_time, TRUE_m12, FALSE_m12, FALSE_m12);
+            else
+                STR_time_string_m12(globals_m12->session_end_time, time_str_session_end_time, TRUE_m12, TRUE_m12, FALSE_m12);
+
+            // absolute start sample number
+            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m12)
+                tmp_mxa_start = -1;  // convert to one-based indexing
+            else
+                tmp_mxa_start = tmd2->absolute_start_sample_number; //slice->start_sample_number;
+
+            // absolute end sample number
+            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m12)
+                tmp_mxa_end = -1;
+            else
+                tmp_mxa_end = tmd2->absolute_start_sample_number + tmd2->number_of_samples;//slice->end_sample_number + 1;  // end is exclusive in python, but inclusive in slice
+
+            // sampling frequency
+            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m12)
+                tmp_mxa_samp_freq = -1;
+            else
+                tmp_mxa_samp_freq = tmd2->sampling_frequency;
+
+        case LH_TIME_SERIES_CHANNEL_m12:
+
+            // Collect segment information
+            printf("\n[DEBUG] NUmber of session segments %ld", globals_m12->number_of_session_segments);
+//            seg = chan->segments[globals_m12->number_of_session_segments-1];
+            if (Sgmt_records != NULL){
+                printf("\nRecords not are null");
+                tmp_mxa_start = Sgmt_records[0].start_sample_number;
+            }
+            fflush(stdout);
+//            printf("\n[DEBUG] NUmber of samples %ld", Sgmt_records[globals_m12->number_of_session_segments-1].end_sample_number+1);
+//            chan->Sgmt_records[ - 1].end_sample_number + 1;
+
+
+
+            metadata_fps = chan->metadata_fps;
+            uh = metadata_fps->universal_header;
+            tmd2 = &metadata_fps->metadata->time_series_section_2;
+            md3 = &metadata_fps->metadata->section_3;
+            //printf("%s\n", metadata_fps->full_file_name);
+            G_extract_path_parts_m12(metadata_fps->full_file_name, path, NULL, NULL);
+            // start time string
+            if (globals_m12->RTO_known == TRUE_m12)
+                STR_time_string_m12(slice->start_time, time_str_start_time, TRUE_m12, FALSE_m12, FALSE_m12);
+            else
+                STR_time_string_m12(slice->start_time, time_str_start_time, TRUE_m12, TRUE_m12, FALSE_m12);
+
+            // end time string
+            if (globals_m12->RTO_known == TRUE_m12)
+                STR_time_string_m12(slice->end_time, time_str_end_time, TRUE_m12, FALSE_m12, FALSE_m12);
+            else
+                STR_time_string_m12(slice->end_time, time_str_end_time, TRUE_m12, TRUE_m12, FALSE_m12);
+
+            // session start time string
+            if (globals_m12->RTO_known == TRUE_m12)
+                STR_time_string_m12(globals_m12->session_start_time, time_str_session_start_time, TRUE_m12, FALSE_m12, FALSE_m12);
+            else
+                STR_time_string_m12(globals_m12->session_start_time, time_str_session_start_time, TRUE_m12, TRUE_m12, FALSE_m12);
+
+            // session end time string
+            if (globals_m12->RTO_known == TRUE_m12)
+                STR_time_string_m12(globals_m12->session_end_time, time_str_session_end_time, TRUE_m12, FALSE_m12, FALSE_m12);
+            else
+                STR_time_string_m12(globals_m12->session_end_time, time_str_session_end_time, TRUE_m12, TRUE_m12, FALSE_m12);
+
+            // absolute start sample number
+            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m12){
+                tmp_mxa_start = -1;  // convert to one-based indexing
+            }
+            else {
+                if (Sgmt_records != NULL)
+                    tmp_mxa_start = Sgmt_records[0].start_sample_number;
+                else
+                    tmp_mxa_start = slice->start_sample_number;
+            }
+
+            // absolute end sample number
+            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m12)
+                tmp_mxa_end = -1;
+            else
+                if (Sgmt_records != NULL)
+                    tmp_mxa_start = Sgmt_records[globals_m12->number_of_session_segments-1].end_sample_number+1;
+                else
+                    tmp_mxa_end = slice->end_sample_number + 1;  // end is exclusive in python, but inclusive in slice
+
+            // sampling frequency
+            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m12 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m12)
+                tmp_mxa_samp_freq = -1;
+            else
+                tmp_mxa_samp_freq = tmd2->sampling_frequency;
+
+    }
 
     if (metadata_fps->parameters.password_data->access_level >= metadata_fps->metadata->section_1.section_3_encryption_level) {
         py_metadata = Py_BuildValue("{s:s,s:L,s:L,s:s,s:s,s:L,s:L,s:s,s:s,s:L,s:L,s:s,s:s,s:s,s:K,s:K,s:s,s:s,s:s,s:i,s:s,s:f,s:d,s:d,s:d,s:d,s:d,s:s,s:d,s:s,s:L,s:i,s:s,s:s,s:s,s:s,s:L,s:L,s:s,s:s,s:s,s:s,s:s,s:s,s:s,s:s}",
@@ -2649,9 +2754,7 @@ PyObject *set_channel_reference(PyObject *self, PyObject *args)
     }
     
     G_change_reference_channel_m12(sess, NULL, chan_name, DEFAULT_CHANNEL_m12);
-    
-    //printf("The reference channel is now set to: %s\n", globals_m12->reference_channel_name);
-    
+
     Py_INCREF(Py_None);
     return Py_None;
 }
@@ -2686,7 +2789,9 @@ PyObject *find_discontinuities(PyObject *self, PyObject *args)
         PyErr_Occurred();
         return NULL;
     }
-    
+
+    PySys_WriteStdout("[dhnmed_file.c] The reference channel is now set to: %s\n", globals_m12->reference_channel_name);
+
     // find contiguous segments
     contigua = G_find_discontinuities_m12((LEVEL_HEADER_m12 *) sess, &num_contigua);
     
