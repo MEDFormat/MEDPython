@@ -36,13 +36,13 @@ class DhnMedPyTest(unittest.TestCase):
         self.level_2_password = 'L2_password'
         self.session_path = 'var_sf.medd'
 
-        self.mef_session = MedSession(self.session_path, self.level_2_password)
+        self.med_session = MedSession(self.session_path, self.level_2_password)
 
     # ----- MED flags test -----
     def test_lh_flags(self):
 
         # ms = MedSession(self.session_path, self.level_2_password)
-        ms = self.mef_session
+        ms = self.med_session
 
         # Load LH flags
         orig_lh_flags = ms._get_lh_flags()
@@ -67,7 +67,7 @@ class DhnMedPyTest(unittest.TestCase):
 
     def test_dm_flags(self):
         # ms = MedSession(self.session_path, self.level_2_password)
-        ms = self.mef_session
+        ms = self.med_session
 
         dm = ms.data_matrix
 
@@ -115,7 +115,7 @@ class DhnMedPyTest(unittest.TestCase):
 
     def test_set_channel(self):
         # ms = MedSession(self.session_path, self.level_2_password)
-        ms = self.mef_session
+        ms = self.med_session
         channel_names = ms.get_channel_names()
 
         ms.set_channel_active(channel_names, False)
@@ -136,7 +136,7 @@ class DhnMedPyTest(unittest.TestCase):
 
     def test_set_reference_channel(self):
         # ms = MedSession(self.session_path, self.level_2_password)
-        ms = self.mef_session
+        ms = self.med_session
 
         ref_channel = ms.reference_channel
 
@@ -154,7 +154,7 @@ class DhnMedPyTest(unittest.TestCase):
 
     def test_read_data_matrix(self):
         # ms = MedSession(self.session_path, self.level_2_password)
-        ms = self.mef_session
+        ms = self.med_session
         dm = ms.data_matrix
 
         # Get required metadata
@@ -220,10 +220,7 @@ class DhnMedPyTest(unittest.TestCase):
         channel_names = ms.get_channel_names()
         ms.set_channel_active(channel_names, False)
         ms.set_channel_active(channel_names[0], True)
-        print("Reading data")
         matrix_result = dm.get_matrix_by_time(None, None, None, 5000)
-
-        print(matrix_result['samples'].shape)
 
         assert matrix_result['samples'].shape[0] == 1
         assert matrix_result['samples'].shape[1] == 5000
@@ -232,7 +229,7 @@ class DhnMedPyTest(unittest.TestCase):
 
     def test_read_session(self):
         # ms = MedSession(self.session_path, self.level_2_password)
-        ms = self.mef_session
+        ms = self.med_session
 
         # Get required metadata
         start_time = ms.session_info['metadata']['start_time']
@@ -287,9 +284,11 @@ class DhnMedPyTest(unittest.TestCase):
         assert len(data[ref_index]) == int(10 * chan_fs)
 
         # Read by index - no end specified
-        data = ms.read_by_index(ref_n_samples - int(10 * chan_fs), None, ref_channel)
+        data = ms.read_by_index(ref_n_samples - int(10 * ref_fs), None, ref_channel)
 
-        assert len(data) == int(10 * chan_fs)
+        print(f"----- Len data {len(data)}")
+        print(f"----- expected len {int(10 * ref_fs)}")
+        assert len(data) == int(10 * ref_fs)
 
         # Read by index - nothing specified
         data = ms.read_by_index(None, None)
@@ -350,7 +349,7 @@ class DhnMedPyTest(unittest.TestCase):
 
     def test_get_records(self):
         # ms = MedSession(self.session_path, self.level_2_password)
-        ms = self.mef_session
+        ms = self.med_session
 
         records = ms.get_session_records()
 
@@ -360,30 +359,46 @@ class DhnMedPyTest(unittest.TestCase):
 
     def test_get_contigua(self):
         # ms = MedSession(self.session_path, self.level_2_password)
-        ms = self.mef_session
+        ms = self.med_session
 
         channel_names = ms.get_channel_names()
         channel_name = channel_names[0]
+
+        import json
+        # print(json.dumps(ms.session_info['channels'], indent=2))
+
         channel_metadata = [x['metadata'] for x in ms.session_info['channels'] if x['metadata']['channel_name'] == channel_name][0]
+        # print(f"Channel metadata {channel_metadata}")
         channel_n_samples = channel_metadata['absolute_end_sample_number'] - channel_metadata['absolute_start_sample_number']
+
         ref_channel = ms.reference_channel
         ref_channel_metadata = [channels_metadata['metadata'] for channels_metadata in ms.session_info['channels'] if
                                 channels_metadata['metadata']['channel_name'] == ref_channel][0]
         ref_n_samples = ref_channel_metadata['absolute_end_sample_number'] - ref_channel_metadata['absolute_start_sample_number']
 
         # Find contigua for current reference channel
-        contigua = ms.find_discontinuities()
+        contigua = ms.get_discontinuities()
+        print(f"Ref channel is {ref_channel}")
+        print("Ref channel metadata")
+        print(json.dumps(ref_channel_metadata, indent=2))
 
+        print(f"Ref ne samles {ref_n_samples}")
+        print(contigua)
         assert contigua[0]['end_index'] == ref_n_samples - 1
 
         # TODO: session info contains number of samples for referential channel not the actual value for channel
         # Find contigua for a specific channel
-        # contigua = ms.find_discontinuities(channel_name=channel_name)
+        contigua = ms.get_discontinuities(channel_name=channel_name)
         #
-        # print(contigua)
-        # print(channel_n_samples)
+        print(contigua)
 
-        # assert contigua[0]['end_index'] == channel_end_sample - 1
+        print(f"ref channel is {self.med_session.reference_channel}")
+        print(ref_n_samples)
+
+        print(f"requested channel is {channel_name}")
+        print(channel_n_samples)
+
+        assert contigua[0]['end_index'] == channel_n_samples - 1
 
         # ms.close()
 
@@ -391,7 +406,8 @@ class DhnMedPyTest(unittest.TestCase):
     #     pass
 
     def tearDown(self):
-        self.mef_session.close()
+        print("Closing session")
+        self.med_session.close()
 
 
 if __name__ == '__main__':
