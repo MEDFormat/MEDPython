@@ -20,6 +20,8 @@
 # Written by Matt Stead, Dan Crepeau and Jan Cimbalnik
 # Copyright Dark Horse Neuro Inc, 2023
 
+import os
+
 # Local imports
 from .medlib_flags import FLAGS
 from .med_file.dhnmed_file import (
@@ -515,6 +517,13 @@ class MedSession:
         # Set default for class destructor
         self.__close_on_destruct = True
 
+        # Initialize data matrix
+        self.data_matrix = None
+
+        # Check if path exists
+        if not os.path.exists(session_path):
+            raise FileNotFoundError(f"Session path {session_path} does not exist.")
+
         # Set default flags
         lh_flags = self._get_lh_flags()
 
@@ -876,11 +885,11 @@ class MedSession:
                     raise MedSession.InvalidArgumentException("List argument must be a list of strings.")
             for chan in chan_name:
                 if chan not in lh_flags['channels'].keys():
-                    raise MedSession.InvalidArgumentException("Channel name not found in session.")
+                    raise MedSession.InvalidArgumentException(f"Channel name {chan} not found in session.")
                 lh_flags['channels'][chan]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] = is_active
         elif type(chan_name) is str:
             if chan_name not in lh_flags['channels'].keys():
-                raise MedSession.InvalidArgumentException("Channel name not found in session.")
+                raise MedSession.InvalidArgumentException(f"Channel name {chan} not found in session.")
             lh_flags['channels'][chan_name]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] = is_active
         else:
             raise MedSession.InvalidArgumentException("Argument must be either a list or a string.")
