@@ -22,8 +22,8 @@
 
 #include <Python.h>
 
-#include "medlib_m12.h"
-#include "medrec_m12.h"
+#include "medlib_m13.h"
+#include "medrec_m13.h"
 
 #define EPSILON 0.0001
 #define FLOAT_EQUAL(x,y) ( ((y - EPSILON) < x) && (x <( y + EPSILON)) )
@@ -39,15 +39,15 @@ static char pymed_file_docstring[] =
     "This submodule provides a wrapper around Multiscale Electrophysiology Data (MED) version 1.0.1 library.";
 
 
-static PyObject     *read_MED_exec(SESSION_m12 *sess, si4 n_files, si8 start_time, si8 end_time, si8 start_idx, si8 end_idx, si1 *password, si1 *ref_chan, TERN_m12 samples_as_singles);
-PyObject*    fill_metadata(LEVEL_HEADER_m12 *level_header, TIME_SLICE_m12 *slice);
-PyObject*   build_contigua(CHANNEL_m12 *chan, si8 start_time, si8 end_time);
-PyObject*    fill_session_records(SESSION_m12 *sess,  DATA_MATRIX_m12 *dm);
-PyObject*    fill_record(RECORD_HEADER_m12 *rh);
-PyObject*    fill_record_matrix(RECORD_HEADER_m12 *rh,  DATA_MATRIX_m12 *dm);
+static PyObject     *read_MED_exec(SESSION_m13 *sess, si4 n_files, si8 start_time, si8 end_time, si8 start_idx, si8 end_idx, si1 *password, si1 *ref_chan, TERN_m13 samples_as_singles);
+PyObject*    fill_metadata(LEVEL_HEADER_m13 *level_header, TIME_SLICE_m13 *slice);
+PyObject*   build_contigua(CHANNEL_m13 *chan, si8 start_time, si8 end_time);
+PyObject*    fill_session_records(SESSION_m13 *sess,  DATA_MATRIX_m13 *dm);
+PyObject*    fill_record(RECORD_HEADER_m13 *rh);
+PyObject*    fill_record_matrix(RECORD_HEADER_m13 *rh,  DATA_MATRIX_m13 *dm);
 si4     rec_compare(const void *a, const void *b);
-//static PyObject     *get_raw_page_exec(SESSION_m12 *sess, si8 start_time, si8 end_time, si8 n_out_samps, si1 *password, TERN_m12 antialias, TERN_m12 detrend, TERN_m12 trace_ranges);
-PyObject*    build_contigua_dm(DATA_MATRIX_m12 *dm);
+//static PyObject     *get_raw_page_exec(SESSION_m13 *sess, si8 start_time, si8 end_time, si8 n_out_samps, si1 *password, TERN_m13 antialias, TERN_m13 detrend, TERN_m13 trace_ranges);
+PyObject*    build_contigua_dm(DATA_MATRIX_m13 *dm);
 
 
 
@@ -65,7 +65,7 @@ static char read_MED_docstring[] =
 
 
 static PyObject *test_api(PyObject *self, PyObject *args);
-void *initialize_time_slice(TIME_SLICE_m12 *slice, PyObject *start_index_obj, PyObject *end_index_obj, PyObject *start_time_obj, PyObject *end_time_obj);
+void *initialize_time_slice(TIME_SLICE_m13 *slice, PyObject *start_index_obj, PyObject *end_index_obj, PyObject *start_time_obj, PyObject *end_time_obj);
 
 
 void session_capsule_destructor(PyObject *capsule);
