@@ -30,7 +30,7 @@
 
 
 si1*    check_utf8(si1* input_string) {
-    if (UTF8_is_valid_m13(input_string, FALSE_m13, NULL) == TRUE_m13)
+    if (UTF8_valid_str_m13(input_string) == TRUE_m13)
         return input_string;
     else
         return "<unreadable>";
@@ -64,15 +64,17 @@ static PyObject *test_api(PyObject *self, PyObject *args)
 void dm_capsule_destructor(PyObject *capsule) {
     void *dm = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
     if (dm != NULL) {
-        DM_free_matrix_m13(dm, TRUE_m13);
+        DM_free_matrix_m13(dm);
     }
 }
 
 void session_capsule_destructor (PyObject *capsule){
+    extern GLOBALS_m13                      *globals_m13;
+
     PyCapsule_SetDestructor(capsule, NULL);
     void *sess = PyCapsule_GetPointer(capsule, PyCapsule_GetName(capsule));
     if (sess != NULL) {
-        G_free_session_m13(sess, TRUE_m13);
+        G_free_session_m13(sess);
     }
     if (globals_m13 != NULL) {
         G_free_globals_m13(TRUE_m13);
@@ -142,23 +144,24 @@ PyObject            *initialize_data_matrix(PyObject *self, PyObject *args)
 {
     DATA_MATRIX_m13         *dm;
 
-    dm = (DATA_MATRIX_m13 *) calloc_m13((size_t) 1, sizeof(DATA_MATRIX_m13), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m13);
+    dm = (DATA_MATRIX_m13 *) calloc_m13((size_t) 1, sizeof(DATA_MATRIX_m13));
     return PyCapsule_New((void *) dm, "dm", dm_capsule_destructor);
 
 }
 
 PyObject            *initialize_session(PyObject *self, PyObject *args)
 {
-    SESSION_m13         *sess;
+    SESS_m13         *sess;
 
     // initialize MED library
-    G_initialize_medlib_m13(FALSE_m13, FALSE_m13);
+    if (globals_m13 == NULL)
+        G_init_medlib_m13(FALSE_m13, NULL);
 
-    sess = (SESSION_m13 *) calloc_m13((size_t) 1, sizeof(SESSION_m13), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m13);
+    sess = (SESS_m13 *) calloc_m13((size_t) 1, sizeof(SESS_m13));
     return PyCapsule_New((void *) sess, "session", session_capsule_destructor);
 }
 
-void    *initialize_time_slice(TIME_SLICE_m13 *slice, PyObject *start_index_obj, PyObject *end_index_obj, PyObject *start_time_obj, PyObject *end_time_obj)
+void    *initialize_time_slice(SLICE_m13 *slice, PyObject *start_index_obj, PyObject *end_index_obj, PyObject *start_time_obj, PyObject *end_time_obj)
 {
 
     si8                                     start_time, end_time, start_index, end_index;
@@ -269,16 +272,18 @@ void    *initialize_time_slice(TIME_SLICE_m13 *slice, PyObject *start_index_obj,
     // Set values
     slice->start_time = start_time;
     slice->end_time = end_time;
-    slice->start_sample_number = start_index;
-    slice->end_sample_number = end_index;
+    slice->start_samp_num = start_index;
+    slice->end_samp_num = end_index;
 
-//    G_show_time_slice_m13(slice);
+//    G_show_SLICE_m13(slice);
+    return NULL;
 }
 
 
 static PyObject *open_MED(PyObject *self, PyObject *args)
 {
-    SESSION_m13                             *sess;
+    PROC_GLOBS_m13                *pg;
+    SESS_m13                *sess;
     si1                     *file_list, **file_list_p;
     si1                     *temp_str_bytes;
     PyObject                *temp_UTF_str;
@@ -287,8 +292,8 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     PyObject                *password_input_obj;
     PyObject                *file_list_seq_obj;
     PyObject* file_list_obj;
-    TERN_m13     license_ok;
-    TIME_SLICE_m13    slice;
+    tern     license_ok;
+    SLICE_m13               slice;
     si1                     pwd_hint_str[256];
     si8                     *py_pointer_changed;
     PyObject                *sess_capsule_object;
@@ -308,6 +313,7 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     PROC_adjust_open_file_limit_m13(MAX_OPEN_FILES_m13(1024, 1), TRUE_m13);
 
     sess = PyCapsule_GetPointer(sess_capsule_object, "session");
+    pg = G_proc_globs_m13((LH_m13 *) sess);
 
     if (sess == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "Invalid session pointer");
@@ -316,7 +322,7 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
     }
 
     if (PyUnicode_Check(file_list_obj)) {
-        file_list = calloc_m13((size_t) FULL_FILE_NAME_BYTES_m13, sizeof(si1), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m13);
+        file_list = calloc_m13((size_t) MAX_NAME_BYTES_m13, sizeof(si1));
         temp_UTF_str = PyUnicode_AsEncodedString(file_list_obj, "utf-8","strict"); // Encode to UTF-8 python objects
         temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
         strcpy(file_list,temp_str_bytes);
@@ -327,7 +333,7 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
         n_files = PySequence_Fast_GET_SIZE(file_list_seq_obj);
 
         if (n_files > 1) {
-            file_list = (void *) calloc_2D_m13((size_t) n_files, (size_t) FULL_FILE_NAME_BYTES_m13, sizeof(si1), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m13);
+            file_list = (void *) calloc_2D_m13((size_t) n_files, (size_t) MAX_NAME_BYTES_m13, sizeof(si1));
             file_list_p =  (si1 **) file_list;
             for (i = 0; i < n_files; i++) {
  
@@ -337,9 +343,9 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
                 printf("file %d, %s\n", i, file_list_p[i]);
             }
         }
-        if (n_files == 1) {
+        else if (n_files == 1) {
 
-            file_list = calloc_m13((size_t) FULL_FILE_NAME_BYTES_m13, sizeof(si1), __FUNCTION__, USE_GLOBAL_BEHAVIOR_m13);
+            file_list = calloc_m13((size_t) MAX_NAME_BYTES_m13, sizeof(si1));
             temp_UTF_str = PyUnicode_AsEncodedString(PySequence_Fast_GET_ITEM(file_list_seq_obj, 0), "utf-8","strict"); // Encode to UTF-8 python objects
             temp_str_bytes = PyBytes_AS_STRING(temp_UTF_str); // Get the *char
             strcpy(file_list,temp_str_bytes);
@@ -368,35 +374,32 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
         password[0] = 0;
     }
 
-    globals_m13->behavior_on_fail = RETURN_ON_FAIL_m13;
-    G_initialize_time_slice_m13(&slice);  // this defaults to full session if nothing specified
+    G_init_slice_m13(&slice);  // this defaults to full session if nothing specified
 
     slice.start_time = BEGINNING_OF_TIME_m13;
     slice.end_time = END_OF_TIME_m13;
 
-    sess = G_open_session_m13(sess, &slice, file_list, n_files, 0, password);
+    sess = G_open_session_m13(sess, &slice, file_list, n_files, 0, password, NULL);
 
     if (sess == NULL) {
-		if (globals_m13->password_data.processed == 0) {
+		if (pg->password_data.processed == 0) {
 		    PyErr_SetString(PyExc_RuntimeError, "No matching input files");
             PyErr_Occurred();
             Py_INCREF(Py_None);
             return Py_None;
-		} else {
-			if (*globals_m13->password_data.level_1_password_hint || *globals_m13->password_data.level_2_password_hint) {
-                PyErr_Format(PyExc_RuntimeError, "Invalid password. Level 1 password hint: %s. Level 2 password hint: %s", globals_m13->password_data.level_1_password_hint, globals_m13->password_data.level_2_password_hint);
-                PyErr_Occurred();
-                Py_INCREF(Py_None);
-                return Py_None;
-			} else {
-			    PyErr_SetString(PyExc_RuntimeError, "Metadata file does not exist");
-                PyErr_Occurred();
-                Py_INCREF(Py_None);
-                return Py_None;
-			}
 		}
+        if (*pg->password_data.level_1_password_hint || *pg->password_data.level_2_password_hint) {
+            PyErr_Format(PyExc_RuntimeError, "Invalid password. Level 1 password hint: %s. Level 2 password hint: %s", pg->password_data.level_1_password_hint, pg->password_data.level_2_password_hint);
+            PyErr_Occurred();
+            Py_INCREF(Py_None);
+            return Py_None;
+        }
+        PyErr_SetString(PyExc_RuntimeError, "Metadata file does not exist");
+        PyErr_Occurred();
+        Py_INCREF(Py_None);
+        return Py_None;
 
-		Py_INCREF(Py_None);
+        Py_INCREF(Py_None);
         return Py_None;
 	}
 
@@ -408,17 +411,18 @@ static PyObject *open_MED(PyObject *self, PyObject *args)
 
 static PyObject *read_session_info(PyObject *self, PyObject *args)
 {
+    PROC_GLOBS_m13                *pg;
     PyObject                                *py_info;
-    TIME_SLICE_m13                          *chan_slice;
+    SLICE_m13                          *chan_slice;
     PyObject                                *py_metadata, *py_channels;
     PyObject                                *py_channel;
     PyObject                                *py_channel_metadata, *py_contigua, *py_password_hints;
     PyObject                                *py_contiguon;
-    CHANNEL_m13                             *chan;
-    TIME_SERIES_METADATA_SECTION_2_m13      *sess_tmd2, *chan_tmd2;
+    CHAN_m13                             *chan;
+    TS_METADATA_SECTION_2_m13      *sess_tmd2, *chan_tmd2;
     si8                                     i, k;
     si4                                     n_channels, n_active_chans;
-    SESSION_m13         *sess;
+    SESS_m13         *sess;
     PyObject* item;
     PyObject* seq;
     PyObject                *sess_capsule_object;
@@ -438,7 +442,8 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
         return NULL;
     }
     
-    sess = (SESSION_m13 *) PyCapsule_GetPointer(sess_capsule_object, "session");
+    sess = (SESS_m13 *) PyCapsule_GetPointer(sess_capsule_object, "session");
+    pg = G_proc_globs_m13((LH_m13 *) sess);
 
     if (sess == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "Error reading session pointer\n");
@@ -446,10 +451,10 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    //show_time_slice_m13(&sess->time_slice);
+    //show_SLICE_m13(&sess->slice);
 
 //    G_show_Sgmt_records_array_m13(sess);
-    n_contigua = G_build_contigua_m13((LEVEL_HEADER_m13 *) sess);
+    n_contigua = G_build_contigua_m13((LH_m13 *) sess);
     //printf("n_contigs = %d\n", n_contigs);
     
     //     ******************************************
@@ -462,24 +467,24 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
     py_contigua = Py_None;
     py_password_hints = Py_None;
     
-    n_channels = sess->number_of_time_series_channels;
+    n_channels = sess->n_ts_chans;
     
-    for (i = n_active_chans = 0; i < sess->number_of_time_series_channels; ++i) {
-        chan = sess->time_series_channels[i];
-        if (chan->flags & LH_CHANNEL_ACTIVE_m13)
+    for (i = n_active_chans = 0; i < sess->n_ts_chans; ++i) {
+        chan = sess->ts_chans[i];
+        if (chan->flags & LH_CHAN_ACTIVE_m13)
             ++n_active_chans;
     }
 
     py_contigua = PyList_New(n_contigua);
-    sess_tmd2 = &sess->time_series_metadata_fps->metadata->time_series_section_2;
+    sess_tmd2 = &sess->ts_metadata_fps->metadata->time_series_section_2;
     for (i=0; i<n_contigua; ++i) {
         //py_contiguon_read = PyList_GetItem(first_chan_contigua, i);
-        if (sess_tmd2->sampling_frequency == FREQUENCY_VARIABLE_m13) {
+        if (sess_tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13) {
             current_start_index = -1;
             current_end_index = -1;
         } else {
-            current_start_index = sess->contigua[i].start_sample_number;
-            current_end_index = sess->contigua[i].end_sample_number;
+            current_start_index = sess->contigua[i].start_samp_num;
+            current_end_index = sess->contigua[i].end_samp_num;
         }
         current_start_time = sess->contigua[i].start_time;
         current_end_time = sess->contigua[i].end_time;
@@ -498,23 +503,23 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
     //printf("n_channels: %d\n", n_channels);
     for (i = k = 0; k< n_channels; ++k) {
 
-        chan = sess->time_series_channels[k];
-        if ((chan->flags & LH_CHANNEL_ACTIVE_m13) == 0)
+        chan = sess->ts_chans[k];
+        if ((chan->flags & LH_CHAN_ACTIVE_m13) == 0)
             continue;
         
-        chan_slice = &chan->time_slice;
-        //show_time_slice_m13(chan_slice);
+        chan_slice = &chan->slice;
+        //show_SLICE_m13(chan_slice);
         chan_tmd2 = &chan->metadata_fps->metadata->time_series_section_2;
         
         // Create session metadata output structure
-        sess_tmd2 = &sess->time_series_metadata_fps->metadata->time_series_section_2;
-        if (sess_tmd2->sampling_frequency != FREQUENCY_VARIABLE_m13 && sess_tmd2->sampling_frequency != FREQUENCY_NO_ENTRY_m13) {
-            chan_tmd2 = &sess->time_series_channels[0]->metadata_fps->metadata->time_series_section_2;
-            sess_tmd2->absolute_start_sample_number = chan_tmd2->absolute_start_sample_number;
-            //printf("DEBUG113: %ld\n", sess->time_series_channels[0]->metadata_fps->metadata->time_series_section_2.number_of_samples);
+        sess_tmd2 = &sess->ts_metadata_fps->metadata->time_series_section_2;
+        if (sess_tmd2->sampling_frequency != TS_METADATA_FREQUENCY_VARIABLE_m13 && sess_tmd2->sampling_frequency != TS_METADATA_FREQUENCY_NO_ENTRY_m13) {
+            chan_tmd2 = &sess->ts_chans[0]->metadata_fps->metadata->time_series_section_2;
+            sess_tmd2->session_start_sample_number = chan_tmd2->session_start_sample_number;
+            //printf("DEBUG113: %ld\n", sess->ts_chans[0]->metadata_fps->metadata->time_series_section_2.number_of_samples);
 
             sess_tmd2->number_of_samples = chan_tmd2->number_of_samples;
-           // printf("DEBUG114: %ld\n", sess->time_series_channels[0]->metadata_fps->metadata->time_series_section_2.number_of_samples);
+           // printf("DEBUG114: %ld\n", sess->ts_chans[0]->metadata_fps->metadata->time_series_section_2.number_of_samples);
 
         }
         
@@ -523,10 +528,10 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
         // fill in channel metadata
         chan_tmd2 = &chan->metadata_fps->metadata->time_series_section_2;
         
-        //chan_tmd2->absolute_start_sample_number = chan_slice->start_sample_number;
+        //chan_tmd2->session_start_sample_number = chan_slice->start_samp_num;
 //        chan_tmd2->number_of_samples = TIME_SLICE_SAMPLE_COUNT_m13(chan_slice);
 //        printf("DEBUG: %ld\n", chan_tmd2->number_of_samples);
-        py_channel_metadata = fill_metadata((LEVEL_HEADER_m13 *) chan, chan_slice);
+        py_channel_metadata = fill_metadata((LH_m13 *) chan, chan_slice);
        
         py_channel = Py_BuildValue("{s:O}", "metadata", py_channel_metadata);
         
@@ -539,10 +544,10 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
 
     //printf("got here pre-metadata\n");
     // session metadata
-    py_metadata = fill_metadata((LEVEL_HEADER_m13 *) sess, &sess->time_slice);
+    py_metadata = fill_metadata((LH_m13 *) sess, &sess->slice);
     //printf("got here post-metadata\n");
     
-    py_password_hints = Py_BuildValue("{s:s,s:s}", "level_1", check_utf8(globals_m13->password_data.level_1_password_hint), "level_2", check_utf8(globals_m13->password_data.level_2_password_hint));
+    py_password_hints = Py_BuildValue("{s:s,s:s}", "level_1", check_utf8(pg->password_data.level_1_password_hint), "level_2", check_utf8(pg->password_data.level_2_password_hint));
     
     // Create session output structure
     py_info = Py_BuildValue("{s:O,s:O,s:O,s:O}",
@@ -564,7 +569,8 @@ static PyObject *read_session_info(PyObject *self, PyObject *args)
 static PyObject *read_MED(PyObject *self, PyObject *args)
 {
     //char                    output_statement[1024];
-    TERN_m13                                samples_as_singles;
+    PROC_GLOBS_m13                *pg;
+    tern                                samples_as_singles;
     PyObject                                *sess_capsule_object;
     PyObject                                *password_input_obj;
     PyObject                                *reference_channel_input_obj;
@@ -576,7 +582,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     npy_intp                                dims[1];
     si4                                     *numpy_arr_data;
     si1                                     password[PASSWORD_BYTES_m13];
-    si1                                     reference_channel[FULL_FILE_NAME_BYTES_m13];
+    si1                                     reference_channel[MAX_NAME_BYTES_m13];
     si8                                     start_time, end_time, start_index, end_index;
     si4                                     i, j, k, m, n;
     si4                                     n_channels, n_segments, seg_offset, n_active_chans;
@@ -585,12 +591,12 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     si1                                     *temp_str_bytes;
     PyObject                                *temp_UTF_str;
     PyObject                                *py_return_object;
-    SESSION_m13                             *sess;
-    CHANNEL_m13                             *chan;
-    SEGMENT_m13                             *seg;
-    TIME_SLICE_m13                          local_time_slice, *slice, *sess_slice, *chan_slice;
-    TIME_SERIES_METADATA_SECTION_2_m13      *sess_tmd2, *chan_tmd2;
-    CMP_PROCESSING_STRUCT_m13               *cps;
+    SESS_m13                             *sess;
+    CHAN_m13                             *chan;
+    SEG_m13                             *seg;
+    SLICE_m13                          local_time_slice, *slice, *sess_slice, *chan_slice, *seg_slice;
+    TS_METADATA_SECTION_2_m13      *sess_tmd2, *chan_tmd2;
+    CPS_m13               *cps;
 
     // initialize Numpy
     import_array();
@@ -623,7 +629,8 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
         return NULL;
     }
     
-    sess = (SESSION_m13*)PyCapsule_GetPointer(sess_capsule_object, "session");
+    sess = (SESS_m13*)PyCapsule_GetPointer(sess_capsule_object, "session");
+    pg = G_proc_globs_m13((LH_m13 *) sess);
 
     if (sess == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "Could not get session pointer from capsule\n");
@@ -632,15 +639,15 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     }
 
     slice = &local_time_slice; // this takes care of freeing memory
-    G_initialize_time_slice_m13(slice);
+    G_init_slice_m13(slice);
     initialize_time_slice(slice, start_index_input_obj, end_index_input_obj, start_time_input_obj, end_time_input_obj);
-//    G_show_time_slice_m13(slice);
+//    G_show_SLICE_m13(slice);
 
     G_read_session_m13(sess, slice);
 
 
     if (sess == NULL) {
-        if (globals_m13->password_data.processed == 0) {
+        if (pg->password_data.processed == 0) {
             G_warning_message_m13("\nread_MED():\nCannot read session => no matching input files.\n");
             PyErr_SetString(PyExc_RuntimeError, "\nread_MED():\nCannot read session => no matching input files.\n");
             PyErr_Occurred();
@@ -653,11 +660,11 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
             return NULL;
         }
     }
-    // use slice from G_read_session_m13();
-    sess_slice = &sess->time_slice;
-//    G_show_time_slice_m13(sess_slice);
+    // use slice from G_read_SESS_m13();
+    sess_slice = &sess->slice;
+//    G_show_SLICE_m13(sess_slice);
 //    printf("after:");
-//    G_show_time_slice_m13(sess_slice);
+//    G_show_SLICE_m13(sess_slice);
 //    printf("got here b3 slice: %ld %ld\n", sess_slice->start_time, sess_slice->end_time);
 
     //     ******************************************
@@ -667,11 +674,11 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     py_channels = Py_None;
     py_contigua = Py_None;
 
-    n_channels = sess->number_of_time_series_channels;
+    n_channels = sess->n_ts_chans;
 
-    for (i = n_active_chans = 0; i < sess->number_of_time_series_channels; ++i) {
-        chan = sess->time_series_channels[i];
-        if (chan->flags & LH_CHANNEL_ACTIVE_m13)
+    for (i = n_active_chans = 0; i < sess->n_ts_chans; ++i) {
+        chan = sess->ts_chans[i];
+        if (chan->flags & LH_CHAN_ACTIVE_m13)
             ++n_active_chans;
     }
 
@@ -679,26 +686,27 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
     // Create channel sub-structures
     py_channels = PyList_New(n_active_chans);
 
-    n_segments = sess->time_slice.number_of_segments;
+    n_segments = sess->slice.n_segs;
 
     for (i = j = 0; j < n_channels; ++j) {
-        chan = sess->time_series_channels[j];
-        if ((chan->flags & LH_CHANNEL_ACTIVE_m13) == 0)
+        chan = sess->ts_chans[j];
+        if ((chan->flags & LH_CHAN_ACTIVE_m13) == 0)
             continue;
 
-        chan_slice = &chan->time_slice;
+        chan_slice = &chan->slice;
         chan_tmd2 = &chan->metadata_fps->metadata->time_series_section_2;
 
-        dims[0] = TIME_SLICE_SAMPLE_COUNT_S_m13(chan->time_slice);
-        seg_offset = G_get_segment_index_m13(sess->time_slice.start_segment_number);
+        dims[0] = SLICE_IDX_COUNT_m13(chan_slice);
+        seg_offset = G_segment_index_m13((LH_m13 *) sess, sess->slice.start_seg_num);
 
         if (n_segments == 1) {
-            seg = chan->segments[seg_offset];
-            cps = seg->time_series_data_fps->parameters.cps;
+            seg = chan->segs[seg_offset];
+            seg_slice = &seg->slice;
+            cps = seg->ts_data_fps->params.cps;
             seg_samps = cps->decompressed_data;
             py_array_out = (PyArrayObject *) PyArray_SimpleNew(1, dims, NPY_INT);
             numpy_arr_data = (si4 *) PyArray_GETPTR1(py_array_out, 0);
-            memcpy(numpy_arr_data, cps->decompressed_data, TIME_SLICE_SAMPLE_COUNT_S_m13(seg->time_slice) * sizeof(si4));
+            memcpy(numpy_arr_data, cps->decompressed_data, SLICE_IDX_COUNT_m13(seg_slice) * sizeof(si4));
 
             // Ownership transfer currently causes double free corruption likely caused by caching)
 //            // Transfer ownership of the data to Numpy Array
@@ -714,10 +722,11 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
             py_array_out = (PyArrayObject *) PyArray_SimpleNew(1, dims, NPY_INT);
             numpy_arr_data = (si4 *) PyArray_GETPTR1(py_array_out, 0);
             for (m=0,n=seg_offset;m<n_segments; ++m,++n) {
-                seg = chan->segments[n];
-                cps = seg->time_series_data_fps->parameters.cps;
+                seg = chan->segs[n];
+                seg_slice = &seg->slice;
+                cps = seg->ts_data_fps->params.cps;
                 seg_samps = cps->decompressed_data;
-                n_seg_samps = TIME_SLICE_SAMPLE_COUNT_S_m13(seg->time_slice);
+                n_seg_samps = SLICE_IDX_COUNT_m13(seg_slice);
                 for (k=0;k<n_seg_samps;++k)
                     numpy_arr_data[k] = seg_samps[k];
                 numpy_arr_data += n_seg_samps;
@@ -726,16 +735,16 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
 
 
         // Create session metadata output structure
-//        sess_tmd2 = &sess->time_series_metadata_fps->metadata->time_series_section_2;
-//        if (sess_tmd2->sampling_frequency != FREQUENCY_VARIABLE_m13 && sess_tmd2->sampling_frequency != FREQUENCY_NO_ENTRY_m13) {
-//            chan_tmd2 = &sess->time_series_channels[0]->metadata_fps->metadata->time_series_section_2;
-//            sess_tmd2->absolute_start_sample_number = chan_tmd2->absolute_start_sample_number;
+//        sess_tmd2 = &sess->ts_metadata_fps->metadata->time_series_section_2;
+//        if (sess_tmd2->sampling_frequency != TS_METADATA_FREQUENCY_VARIABLE_m13 && sess_tmd2->sampling_frequency != TS_METADATA_FREQUENCY_NO_ENTRY_m13) {
+//            chan_tmd2 = &sess->ts_chans[0]->metadata_fps->metadata->time_series_section_2;
+//            sess_tmd2->session_start_sample_number = chan_tmd2->session_start_sample_number;
 //            sess_tmd2->number_of_samples = chan_tmd2->number_of_samples;
 //        }
 
         // fill in channel metadata
 //        chan_tmd2 = &chan->metadata_fps->metadata->time_series_section_2;
-//        chan_tmd2->absolute_start_sample_number = chan_slice->start_sample_number;
+//        chan_tmd2->session_start_sample_number = chan_slice->start_samp_num;
 //        chan_tmd2->number_of_samples = TIME_SLICE_SAMPLE_COUNT_m13(chan_slice);
 //        py_channel_metadata = fill_metadata(chan->metadata_fps, chan_slice);
         // fill in channel contigua
@@ -759,7 +768,7 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
 
 //    printf("got here pre-metadata\n");
     // session metadata
-//    py_metadata = fill_metadata(sess->time_series_metadata_fps, sess_slice);
+//    py_metadata = fill_metadata(sess->ts_metadata_fps, sess_slice);
 //    printf("got here post-metadata\n");
 
     // session records
@@ -785,8 +794,8 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
 //
 //        for (i=0; i< n_contigua; ++i) {
 //            py_contiguon_read = PyList_GetItem(first_chan_contigua, i);
-//            sess_tmd2 = &sess->time_series_metadata_fps->metadata->time_series_section_2;
-//            if (sess_tmd2->sampling_frequency == FREQUENCY_VARIABLE_m13) {
+//            sess_tmd2 = &sess->ts_metadata_fps->metadata->time_series_section_2;
+//            if (sess_tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13) {
 //                current_start_index = -1;
 //                current_end_index = -1;
 //            } else {
@@ -826,33 +835,34 @@ static PyObject *read_MED(PyObject *self, PyObject *args)
 }
 
 
-PyObject*   build_contigua(CHANNEL_m13 *chan, si8 start_time, si8 end_time)
+PyObject*   build_contigua(CHAN_m13 *chan, si8 start_time, si8 end_time, tern relative_days)
 {
     si4                n_segs;
     si8                             i, j, k, n_inds, start_idx, end_idx, n_disconts, n_contigs, abs_offset;
     si8                             total_samps_in_segs, local_end_time, local_end_sample;
     si4                             seg_offset;
-    SEGMENT_m13                     *seg;
-    TIME_SERIES_INDEX_m13           *tsi;
+    SEG_m13                     *seg;
+    TS_IDX_m13           *tsi;
     PyObject                        *py_contigua_list;
     PyObject                        *py_contiguon;
     si8                             current_start_time, current_start_index, current_end_time, current_end_index;
     
-    n_segs = chan->time_slice.number_of_segments;
-    //seg_offset = G_get_segment_offset_m13((LEVEL_HEADER_m13 *) chan);
-    seg_offset = G_get_segment_index_m13(chan->time_slice.start_segment_number);
+    n_segs = chan->slice.n_segs;
+    // seg_offset = G_get_segment_offset_m13((LH_m13 *) chan);
+    // seg_offset = G_get_segment_index_m13(chan->slice.start_seg_num);
+    seg_offset = chan->slice.start_seg_num;
     for (n_disconts = i = 0, k=seg_offset; i < n_segs; ++i, ++k) {
-        seg = chan->segments[k];
-        abs_offset = seg->metadata_fps->metadata->time_series_section_2.absolute_start_sample_number;
-        start_idx = seg->time_slice.start_sample_number - abs_offset;
-        end_idx = seg->time_slice.end_sample_number - abs_offset;
-        tsi = seg->time_series_indices_fps->time_series_indices;
-        n_inds = seg->time_series_indices_fps->universal_header->number_of_entries;
+        seg = chan->segs[k];
+        abs_offset = seg->metadata_fps->metadata->time_series_section_2.session_start_sample_number;
+        start_idx = seg->slice.start_samp_num - abs_offset;
+        end_idx = seg->slice.end_samp_num - abs_offset;
+        tsi = seg->ts_inds_fps->ts_inds;
+        n_inds = seg->ts_inds_fps->uh->n_entries;
         for (j = 0; j < n_inds; ++j)
-            if (tsi[j].start_sample_number > start_idx)
+            if (tsi[j].start_samp_num > start_idx)
                 break;
         for (; j < n_inds; ++j) {
-            if (tsi[j].start_sample_number > end_idx)
+            if (tsi[j].start_samp_num > end_idx)
                 break;
             if (tsi[j].file_offset < 0)
                 ++n_disconts;
@@ -868,22 +878,22 @@ PyObject*   build_contigua(CHANNEL_m13 *chan, si8 start_time, si8 end_time)
     n_disconts = 0;
     total_samps_in_segs = 0;
     for (i = 0, k=seg_offset; i < n_segs; ++i, ++k) {
-        seg = chan->segments[k];
-        abs_offset = seg->metadata_fps->metadata->time_series_section_2.absolute_start_sample_number;
-        start_idx = seg->time_slice.start_sample_number - abs_offset;
-        end_idx = seg->time_slice.end_sample_number - abs_offset;
-        tsi = seg->time_series_indices_fps->time_series_indices;
-        n_inds = seg->time_series_indices_fps->universal_header->number_of_entries;
+        seg = chan->segs[k];
+        abs_offset = seg->metadata_fps->metadata->time_series_section_2.session_start_sample_number;
+        start_idx = seg->slice.start_samp_num - abs_offset;
+        end_idx = seg->slice.end_samp_num - abs_offset;
+        tsi = seg->ts_inds_fps->ts_inds;
+        n_inds = seg->ts_inds_fps->uh->n_entries;
         for (j = 0; j < n_inds; ++j)
-            if (tsi[j].start_sample_number > start_idx)
+            if (tsi[j].start_samp_num > start_idx)
                 break;
         for (; j < n_inds; ++j) {
-            if (tsi[j].start_sample_number > end_idx)
+            if (tsi[j].start_samp_num > end_idx)
                 break;
             if (tsi[j].file_offset < 0) {
-                current_end_index = tsi[j].start_sample_number + total_samps_in_segs;
-                local_end_sample = tsi[j].start_sample_number - 1;
-                local_end_time = G_uutc_for_sample_number_m13((LEVEL_HEADER_m13 *) seg, local_end_sample, FIND_END_m13);
+                current_end_index = tsi[j].start_samp_num + total_samps_in_segs;
+                local_end_sample = tsi[j].start_samp_num - 1;
+                local_end_time = G_uutc_for_sample_number_m13((LH_m13 *) seg, local_end_sample, FIND_END_m13);
                 current_end_time = local_end_time;
                 
                 py_contiguon = Py_BuildValue("{s:L,s:L,s:L,s:L}",
@@ -896,7 +906,7 @@ PyObject*   build_contigua(CHANNEL_m13 *chan, si8 start_time, si8 end_time)
                 
                 ++n_disconts;
                 
-                current_start_index = tsi[j].start_sample_number + total_samps_in_segs + 1;
+                current_start_index = tsi[j].start_samp_num + total_samps_in_segs + 1;
                 current_start_time = tsi[j].start_time;
             }
         }
@@ -918,168 +928,246 @@ PyObject*   build_contigua(CHANNEL_m13 *chan, si8 start_time, si8 end_time)
 }
 
 
-PyObject*    fill_metadata(LEVEL_HEADER_m13 *level_header, TIME_SLICE_m13 *slice)
+PyObject*    fill_metadata(LH_m13 *level_header, SLICE_m13 *slice)
 {
-    extern GLOBALS_m13                      *globals_m13;
+    PROC_GLOBS_m13	                        *pg;
     si1                                     time_str_start_time[TIME_STRING_BYTES_m13], time_str_end_time[TIME_STRING_BYTES_m13],
     time_str_session_start_time[TIME_STRING_BYTES_m13], time_str_session_end_time[TIME_STRING_BYTES_m13];
-    si1                                     path[FULL_FILE_NAME_BYTES_m13];
-    SESSION_m13                             *sess;
-    Sgmt_RECORD_m13                         *Sgmt_records;
-    CHANNEL_m13                             *chan;
-    SEGMENT_m13                             *seg;
-    FILE_PROCESSING_STRUCT_m13              *metadata_fps;
-    UNIVERSAL_HEADER_m13                    *uh;
-    TIME_SERIES_METADATA_SECTION_2_m13      *tmd2;
+    si1                                     path[MAX_NAME_BYTES_m13];
+    SESS_m13                             *sess;
+    Sgmt_REC_m13                         *Sgmt_records;
+    CHAN_m13                             *chan;
+    SEG_m13                             *seg;
+    FPS_m13              *metadata_fps;
+    UH_m13                    *uh;
+    METADATA_SECTION_1_m13          *md1;
+    TS_METADATA_SECTION_2_m13      *tmd2;
     METADATA_SECTION_3_m13                  *md3;
     si4                                     i, n_segments;
+    ui4                                     type_code;
     si8                                     tmp_mxa_start, tmp_mxa_end;
     sf8                                     tmp_mxa_samp_freq;
     PyObject                                *py_metadata;
 
-    switch (level_header->type_code) {
-		case LH_SESSION_m13:
-			sess = (SESSION_m13 *) level_header;
-			chan = globals_m13->reference_channel;
-			if (chan == NULL)
-				chan = G_change_reference_channel_m13(sess, NULL, NULL, DEFAULT_CHANNEL_m13);
-			// Sgmt_records = sess->Sgmt_records;
-			// printf("\n-----Session level\n");
-		 //    fflush(stdout);
-		 //    G_show_Sgmt_records_array_m13(level_header, NULL);
-			break;
-		case LH_TIME_SERIES_CHANNEL_m13:
-		    chan = (CHANNEL_m13 *) level_header;
-			sess = (SESSION_m13 *) chan->parent;
-			// Sgmt_records = chan->Sgmt_records;
-			// printf("\n-----Channel level %s\n", chan->name);
-		 //    fflush(stdout);
-		 //    G_show_Sgmt_records_array_m13(level_header, NULL);
-		case LH_VIDEO_CHANNEL_m13:
-			chan = (CHANNEL_m13 *) level_header;
-			sess = (SESSION_m13 *) chan->parent;
-			break;
-		default:
-			G_error_message_m13("%s(): invalid level\n", __FUNCTION__);
-			return(0);
-	}
-
-    n_segments = sess->time_slice.number_of_segments;
+    pg = G_proc_globs_m13(level_header);
 
     switch (level_header->type_code) {
-
-        case LH_SESSION_m13:
-
-            // metadata_fps = sess->time_series_metadata_fps;
-            // uh = metadata_fps->universal_header;
-            // tmd2 = &metadata_fps->metadata->time_series_section_2;
-            // md3 = &metadata_fps->metadata->section_3;
-            //printf("%s\n", metadata_fps->full_file_name);
-            // G_extract_path_parts_m13(metadata_fps->full_file_name, path, NULL, NULL);
-            // start time string
-            if (globals_m13->RTO_known == TRUE_m13)
-                STR_time_string_m13(slice->start_time, time_str_start_time, TRUE_m13, FALSE_m13, FALSE_m13);
-            else
-                STR_time_string_m13(slice->start_time, time_str_start_time, TRUE_m13, TRUE_m13, FALSE_m13);
-
-            // end time string
-            if (globals_m13->RTO_known == TRUE_m13)
-                STR_time_string_m13(slice->end_time, time_str_end_time, TRUE_m13, FALSE_m13, FALSE_m13);
-            else
-                STR_time_string_m13(slice->end_time, time_str_end_time, TRUE_m13, TRUE_m13, FALSE_m13);
-
-            // session start time string
-            if (globals_m13->RTO_known == TRUE_m13)
-                STR_time_string_m13(globals_m13->session_start_time, time_str_session_start_time, TRUE_m13, FALSE_m13, FALSE_m13);
-            else
-                STR_time_string_m13(globals_m13->session_start_time, time_str_session_start_time, TRUE_m13, TRUE_m13, FALSE_m13);
-
-            // session end time string
-            if (globals_m13->RTO_known == TRUE_m13)
-                STR_time_string_m13(globals_m13->session_end_time, time_str_session_end_time, TRUE_m13, FALSE_m13, FALSE_m13);
-            else
-                STR_time_string_m13(globals_m13->session_end_time, time_str_session_end_time, TRUE_m13, TRUE_m13, FALSE_m13);
-
-            // absolute start sample number
-            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m13)
-                tmp_mxa_start = -1;  // convert to one-based indexing
-            else
-                for (i=0;i<n_segments; ++i):{
-                tmp_mxa_start = tmd2->absolute_start_sample_number; //slice->start_sample_number;
-                }
-            // absolute end sample number
-            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m13)
-                tmp_mxa_end = -1;
-            else
-                tmp_mxa_end = tmd2->absolute_start_sample_number + tmd2->number_of_samples;//slice->end_sample_number + 1;  // end is exclusive in python, but inclusive in slice
-
-            // sampling frequency
-            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m13)
-                tmp_mxa_samp_freq = -1;
-            else
-                tmp_mxa_samp_freq = tmd2->sampling_frequency;
-
-        case LH_TIME_SERIES_CHANNEL_m13:
-
-            metadata_fps = chan->metadata_fps;
-            uh = metadata_fps->universal_header;
-            tmd2 = &metadata_fps->metadata->time_series_section_2;
-            md3 = &metadata_fps->metadata->section_3;
-            //printf("%s\n", metadata_fps->full_file_name);
-            G_extract_path_parts_m13(metadata_fps->full_file_name, path, NULL, NULL);
-            // start time string
-            if (globals_m13->RTO_known == TRUE_m13)
-                STR_time_string_m13(slice->start_time, time_str_start_time, TRUE_m13, FALSE_m13, FALSE_m13);
-            else
-                STR_time_string_m13(slice->start_time, time_str_start_time, TRUE_m13, TRUE_m13, FALSE_m13);
-
-            // end time string
-            if (globals_m13->RTO_known == TRUE_m13)
-                STR_time_string_m13(slice->end_time, time_str_end_time, TRUE_m13, FALSE_m13, FALSE_m13);
-            else
-                STR_time_string_m13(slice->end_time, time_str_end_time, TRUE_m13, TRUE_m13, FALSE_m13);
-
-            // session start time string
-            if (globals_m13->RTO_known == TRUE_m13)
-                STR_time_string_m13(globals_m13->session_start_time, time_str_session_start_time, TRUE_m13, FALSE_m13, FALSE_m13);
-            else
-                STR_time_string_m13(globals_m13->session_start_time, time_str_session_start_time, TRUE_m13, TRUE_m13, FALSE_m13);
-
-            // session end time string
-            if (globals_m13->RTO_known == TRUE_m13)
-                STR_time_string_m13(globals_m13->session_end_time, time_str_session_end_time, TRUE_m13, FALSE_m13, FALSE_m13);
-            else
-                STR_time_string_m13(globals_m13->session_end_time, time_str_session_end_time, TRUE_m13, TRUE_m13, FALSE_m13);
-
-            // absolute start sample number
-            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m13){
-                tmp_mxa_start = -1;  // convert to one-based indexing
+        case TS_SEG_TYPE_CODE_m13:
+        case VID_SEG_TYPE_CODE_m13:
+            seg = (SEG_m13 *) level_header;
+            if (seg == NULL) {
+                G_set_error_m13(E_GEN_m13, "segment is not open");
             }
-            else {
-                if (Sgmt_records != NULL)
-                    tmp_mxa_start = Sgmt_records[0].start_sample_number;
-                else
-                    tmp_mxa_start = slice->start_sample_number;
+            slice = &seg->slice;
+            chan = NULL;
+            type_code = level_header->type_code;
+            Sgmt_records = G_Sgmt_records_m13(level_header, INDEX_SEARCH_m13);
+            break;
+        case TS_CHAN_TYPE_CODE_m13:
+        case VID_CHAN_TYPE_CODE_m13:
+            chan = (CHAN_m13 *) level_header;
+            if (chan == NULL) {
+                G_set_error_m13(E_GEN_m13, "channel is not open");
             }
-
-            // absolute end sample number
-            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m13)
-                tmp_mxa_end = -1;
-            else
-                if (Sgmt_records != NULL)
-                    tmp_mxa_start = Sgmt_records[globals_m13->number_of_session_segments-1].end_sample_number+1;
-                else
-                    tmp_mxa_end = slice->end_sample_number + 1;  // end is exclusive in python, but inclusive in slice
-
-            // sampling frequency
-            if (tmd2->sampling_frequency == FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == FREQUENCY_NO_ENTRY_m13)
-                tmp_mxa_samp_freq = -1;
-            else
-                tmp_mxa_samp_freq = tmd2->sampling_frequency;
-
+            slice = &chan->slice;
+            type_code = level_header->type_code;
+            Sgmt_records = G_Sgmt_records_m13(level_header, INDEX_SEARCH_m13);
+            break;
+        case SESS_TYPE_CODE_m13:
+            sess = (SESS_m13 *) level_header;
+            if (sess == NULL) {
+                G_set_error_m13(E_GEN_m13, "session is not open");
+            }
+            chan = pg->current_session.index_channel;
+            slice = &sess->slice;
+            type_code = level_header->type_code;
+            Sgmt_records = G_Sgmt_records_m13(level_header, INDEX_SEARCH_m13);
+            break;
+        default:
+            G_set_error_m13(E_GEN_m13, "invalid level type");
     }
 
-    if (metadata_fps->parameters.password_data->access_level >= metadata_fps->metadata->section_1.section_3_encryption_level) {
+    n_segments = slice->n_segs;
+
+    // start time string
+    STR_time_m13(level_header, slice->start_time, time_str_start_time, TRUE_m13, pg->time_constants.RTO_known, FALSE_m13);
+
+    // end time string
+    STR_time_m13(level_header, slice->end_time, time_str_end_time, TRUE_m13, pg->time_constants.RTO_known, FALSE_m13);
+
+    // session start time string
+    STR_time_m13(level_header, pg->current_session.start_time, time_str_session_start_time, TRUE_m13, pg->time_constants.RTO_known, FALSE_m13);
+
+    // session end time string
+    STR_time_m13(level_header, pg->current_session.end_time, time_str_session_end_time, TRUE_m13, pg->time_constants.RTO_known, FALSE_m13);
+
+    // absolute start sample number
+    if (tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == TS_METADATA_FREQUENCY_NO_ENTRY_m13)
+        tmp_mxa_start = -1;  // convert to one-based indexing
+    else {
+        for (i=0;i<n_segments; ++i){
+            tmp_mxa_start = tmd2->session_start_sample_number; //slice->start_samp_num;
+        }
+    }
+    // absolute end sample number
+    if (tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == TS_METADATA_FREQUENCY_NO_ENTRY_m13)
+        tmp_mxa_end = -1;
+    else
+        tmp_mxa_end = tmd2->session_start_sample_number + tmd2->number_of_samples;//slice->end_samp_num + 1;  // end is exclusive in python, but inclusive in slice
+
+    // sampling frequency
+    if (tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == TS_METADATA_FREQUENCY_NO_ENTRY_m13)
+        tmp_mxa_samp_freq = -1;
+    else
+        tmp_mxa_samp_freq = tmd2->sampling_frequency;
+ //
+ //    switch (level_header->type_code) {
+	// 	case LH_SESS_m13:
+	// 		sess = (SESS_m13 *) level_header;
+	// 		chan = pg->current_session.index_channel_name;
+	// 		if (chan == NULL)
+	// 			chan = G_change_index_chan_m13(sess, NULL, NULL, DEFAULT_CHAN_m13);
+	// 		// Sgmt_records = sess->Sgmt_records;
+	// 		// printf("\n-----Session level\n");
+	// 	 //    fflush(stdout);
+	// 	 //    G_show_Sgmt_records_array_m13(level_header, NULL);
+	// 		break;
+	// 	case LH_TIME_SERIES_CHAN_m13:
+	// 	    chan = (CHAN_m13 *) level_header;
+	// 		sess = (SESS_m13 *) chan->parent;
+	// 		// Sgmt_records = chan->Sgmt_records;
+	// 		// printf("\n-----Channel level %s\n", chan->name);
+	// 	 //    fflush(stdout);
+	// 	 //    G_show_Sgmt_records_array_m13(level_header, NULL);
+	// 	case LH_VIDEO_CHAN_m13:
+	// 		chan = (CHAN_m13 *) level_header;
+	// 		sess = (SESS_m13 *) chan->parent;
+	// 		break;
+	// 	default:
+	// 		G_error_message_m13("%s(): invalid level\n", __FUNCTION__);
+	// 		return(0);
+	// }
+ //
+ //
+ //
+ //    switch (level_header->type_code) {
+ //
+ //        case LH_SESS_m13:
+ //
+ //            // metadata_fps = sess->ts_metadata_fps;
+ //            // uh = metadata_fps->uh;
+ //            // tmd2 = &metadata_fps->metadata->time_series_section_2;
+ //            // md3 = &metadata_fps->metadata->section_3;
+ //            //printf("%s\n", metadata_fps->local_name);
+ //            // G_extract_path_parts_m13(metadata_fps->local_name, path, NULL, NULL);
+ //            // start time string
+ //            if (pg->time_constants.RTO_known == TRUE_m13)
+ //                STR_time_m13(NULL, fp->acc, tim_str, TRUE_m13, FALSE_m13, FALSE_m13);
+ //            STR_time_m13(void *level_header, si8 uutc_time, si1 *time_str, tern fixed_width, tern relative_days, si4 colored_text, ...);
+ //                STR_time_m13(slice->start_time, time_str_start_time, TRUE_m13, FALSE_m13, FALSE_m13);
+ //            else
+ //                STR_time_string_m13(slice->start_time, time_str_start_time, TRUE_m13, TRUE_m13, FALSE_m13);
+ //
+ //            // end time string
+ //            if (pg->time_constants.RTO_known == TRUE_m13)
+ //                STR_time_string_m13(slice->end_time, time_str_end_time, TRUE_m13, FALSE_m13, FALSE_m13);
+ //            else
+ //                STR_time_string_m13(slice->end_time, time_str_end_time, TRUE_m13, TRUE_m13, FALSE_m13);
+ //
+ //            // session start time string
+ //            if (pg->time_constants.RTO_known == TRUE_m13)
+ //                STR_time_string_m13(globals_m13->session_start_time, time_str_session_start_time, TRUE_m13, FALSE_m13, FALSE_m13);
+ //            else
+ //                STR_time_string_m13(globals_m13->session_start_time, time_str_session_start_time, TRUE_m13, TRUE_m13, FALSE_m13);
+ //
+ //            // session end time string
+ //            if (pg->time_constants.RTO_known == TRUE_m13)
+ //                STR_time_string_m13(globals_m13->session_end_time, time_str_session_end_time, TRUE_m13, FALSE_m13, FALSE_m13);
+ //            else
+ //                STR_time_string_m13(globals_m13->session_end_time, time_str_session_end_time, TRUE_m13, TRUE_m13, FALSE_m13);
+ //
+ //            // absolute start sample number
+ //            if (tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == TS_METADATA_FREQUENCY_NO_ENTRY_m13)
+ //                tmp_mxa_start = -1;  // convert to one-based indexing
+ //            else {
+ //                for (i=0;i<n_segments; ++i){
+ //                    tmp_mxa_start = tmd2->session_start_sample_number; //slice->start_samp_num;
+ //                }
+ //            }
+ //            // absolute end sample number
+ //            if (tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == TS_METADATA_FREQUENCY_NO_ENTRY_m13)
+ //                tmp_mxa_end = -1;
+ //            else
+ //                tmp_mxa_end = tmd2->session_start_sample_number + tmd2->number_of_samples;//slice->end_samp_num + 1;  // end is exclusive in python, but inclusive in slice
+ //
+ //            // sampling frequency
+ //            if (tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == TS_METADATA_FREQUENCY_NO_ENTRY_m13)
+ //                tmp_mxa_samp_freq = -1;
+ //            else
+ //                tmp_mxa_samp_freq = tmd2->sampling_frequency;
+ //
+ //        case LH_TIME_SERIES_CHAN_m13:
+ //
+ //            metadata_fps = chan->metadata_fps;
+ //            uh = metadata_fps->uh;
+ //            md1 = &metadata_fps->metadata->section_1;
+ //            tmd2 = &metadata_fps->metadata->time_series_section_2;
+ //            md3 = &metadata_fps->metadata->section_3;
+ //            //printf("%s\n", metadata_fps->local_name);
+ //            G_extract_path_parts_m13(metadata_fps->local_name, path, NULL, NULL);
+ //            // start time string
+ //            if (pg->time_constants.RTO_known == TRUE_m13)
+ //                STR_time_string_m13(slice->start_time, time_str_start_time, TRUE_m13, FALSE_m13, FALSE_m13);
+ //            else
+ //                STR_time_string_m13(slice->start_time, time_str_start_time, TRUE_m13, TRUE_m13, FALSE_m13);
+ //
+ //            // end time string
+ //            if (pg->time_constants.RTO_known == TRUE_m13)
+ //                STR_time_string_m13(slice->end_time, time_str_end_time, TRUE_m13, FALSE_m13, FALSE_m13);
+ //            else
+ //                STR_time_string_m13(slice->end_time, time_str_end_time, TRUE_m13, TRUE_m13, FALSE_m13);
+ //
+ //            // session start time string
+ //            if (pg->time_constants.RTO_known == TRUE_m13)
+ //                STR_time_string_m13(globals_m13->session_start_time, time_str_session_start_time, TRUE_m13, FALSE_m13, FALSE_m13);
+ //            else
+ //                STR_time_string_m13(globals_m13->session_start_time, time_str_session_start_time, TRUE_m13, TRUE_m13, FALSE_m13);
+ //
+ //            // session end time string
+ //            if (pg->time_constants.RTO_known == TRUE_m13)
+ //                STR_time_string_m13(globals_m13->session_end_time, time_str_session_end_time, TRUE_m13, FALSE_m13, FALSE_m13);
+ //            else
+ //                STR_time_string_m13(globals_m13->session_end_time, time_str_session_end_time, TRUE_m13, TRUE_m13, FALSE_m13);
+ //
+ //            // absolute start sample number
+ //            if (tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == TS_METADATA_FREQUENCY_NO_ENTRY_m13){
+ //                tmp_mxa_start = -1;  // convert to one-based indexing
+ //            }
+ //            else {
+ //                if (Sgmt_records != NULL)
+ //                    tmp_mxa_start = Sgmt_records[0].start_samp_num;
+ //                else
+ //                    tmp_mxa_start = slice->start_samp_num;
+ //            }
+ //
+ //            // absolute end sample number
+ //            if (tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == TS_METADATA_FREQUENCY_NO_ENTRY_m13)
+ //                tmp_mxa_end = -1;
+ //            else
+ //                if (Sgmt_records != NULL)
+ //                    tmp_mxa_start = Sgmt_records[pg->current_session.n_segments-1].end_samp_num+1;
+ //                else
+ //                    tmp_mxa_end = slice->end_samp_num + 1;  // end is exclusive in python, but inclusive in slice
+ //
+ //            // sampling frequency
+ //            if (tmd2->sampling_frequency == TS_METADATA_FREQUENCY_VARIABLE_m13 || tmd2->sampling_frequency == TS_METADATA_FREQUENCY_NO_ENTRY_m13)
+ //                tmp_mxa_samp_freq = -1;
+ //            else
+ //                tmp_mxa_samp_freq = tmd2->sampling_frequency;
+ //
+ //    }
+
+    if (pg->password_data.access_level >= Sgmt_records[0].header.encryption_level) {
         py_metadata = Py_BuildValue("{s:s,s:L,s:L,s:s,s:s,s:L,s:L,s:s,s:s,s:L,s:L,s:s,s:s,s:s,s:K,s:K,s:s,s:s,s:s,s:i,s:s,s:f,s:d,s:d,s:d,s:d,s:d,s:s,s:d,s:s,s:L,s:i,s:s,s:s,s:s,s:s,s:L,s:L,s:s,s:s,s:s,s:s,s:s,s:s,s:s,s:s}",
                                     
                                     "path", check_utf8(path),
@@ -1087,15 +1175,15 @@ PyObject*    fill_metadata(LEVEL_HEADER_m13 *level_header, TIME_SLICE_m13 *slice
                                     "end_time", slice->end_time,
                                     "start_time_string", check_utf8(time_str_start_time),
                                     "end_time_string", check_utf8(time_str_end_time),
-                                    "session_start_time", globals_m13->session_start_time,
-                                    "session_end_time", globals_m13->session_end_time,
+                                    "session_start_time", pg->current_session.start_time,
+                                    "session_end_time", pg->current_session.end_time,
                                     "session_start_time_string", check_utf8(time_str_session_start_time),
                                     "session_end_time_string", check_utf8(time_str_session_end_time),
-                                    "absolute_start_sample_number", tmp_mxa_start,
-                                    "absolute_end_sample_number", tmp_mxa_end,
+                                    "session_start_sample_number", tmp_mxa_start,
+                                    "absolute_end_samp_num", tmp_mxa_end,
                                     "session_name", check_utf8(uh->session_name),
                                     "channel_name", check_utf8(uh->channel_name),
-                                    "anonymized_subject_ID", check_utf8(uh->anonymized_subject_ID),
+                                    "anonymized_subject_ID", check_utf8(md1->anonymized_subject_ID),
                                     "session_UID", uh->session_UID,
                                     "channel_UID", uh->channel_UID,
                                     "session_description", check_utf8(tmd2->session_description),
@@ -1136,15 +1224,15 @@ PyObject*    fill_metadata(LEVEL_HEADER_m13 *level_header, TIME_SLICE_m13 *slice
                                     "end_time", slice->end_time,
                                     "start_time_string", check_utf8(time_str_start_time),
                                     "end_time_string", check_utf8(time_str_end_time),
-                                    "session_start_time", globals_m13->session_start_time,
-                                    "session_end_time", globals_m13->session_end_time,
+                                    "session_start_time", pg->current_session.start_time,
+                                    "session_end_time", pg->current_session.end_time,
                                     "session_start_time_string", check_utf8(time_str_session_start_time),
                                     "session_end_time_string", check_utf8(time_str_session_end_time),
-                                    "absolute_start_sample_number", tmp_mxa_start,
-                                    "absolute_end_sample_number", tmp_mxa_end,
+                                    "session_start_sample_number", tmp_mxa_start,
+                                    "absolute_end_samp_num", tmp_mxa_end,
                                     "session_name", check_utf8(uh->session_name),
                                     "channel_name", check_utf8(uh->channel_name),
-                                    "anonymized_subject_ID", check_utf8(uh->anonymized_subject_ID),
+                                    "anonymized_subject_ID", check_utf8(md1->anonymized_subject_ID),
                                     "session_UID", uh->session_UID,
                                     "channel_UID", uh->channel_UID,
                                     "session_description", check_utf8(tmd2->session_description),
@@ -1183,41 +1271,44 @@ PyObject*    fill_metadata(LEVEL_HEADER_m13 *level_header, TIME_SLICE_m13 *slice
 }
 
 
-PyObject*    fill_session_records(SESSION_m13 *sess,  DATA_MATRIX_m13 *dm)
+PyObject*    fill_session_records(SESS_m13 *sess,  DATA_MATRIX_m13 *dm)
 {
+    extern GLOBALS_m13      *globals_m13;
+    PROC_GLOBS_m13          *pg;
     si4                     n_segs, seg_idx;
     si8                     i, j, k, n_items, tot_recs, n_recs;
     ui1                     *rd;
-    RECORD_HEADER_m13       **rec_ptrs, *rh;
+    REC_HDR_m13       **rec_ptrs, *rh;
     PyObject                *py_record_list;
     PyObject                *temp_record;
-    FILE_PROCESSING_STRUCT_m13    *rd_fps;
-    
+    FPS_m13    *rd_fps;
 
-    n_segs = sess->time_slice.number_of_segments;
+    pg = G_proc_globs_m13((LH_m13 *) sess);
+
+    n_segs = sess->slice.n_segs;
     
     // set up sorted records array
     tot_recs = 0;
-    if (sess->record_data_fps != NULL && sess->record_indices_fps != NULL)
-        tot_recs = sess->record_data_fps->number_of_items;
-    if (sess->segmented_sess_recs != NULL) {
-        seg_idx = G_get_segment_index_m13(sess->time_slice.start_segment_number);
+    if (sess->rec_data_fps != NULL && sess->rec_inds_fps != NULL)
+        tot_recs = sess->rec_data_fps->n_items;
+    if (sess->Sgmt_recs != NULL) {
+        seg_idx = G_segment_index_m13((LH_m13 *) sess, sess->slice.start_seg_num);
         for (i = 0, j = seg_idx; i < n_segs; ++i, ++j) {
-            rd_fps = sess->segmented_sess_recs->record_data_fps[j];
+            rd_fps = &sess->rec_data_fps[j];
                 if (rd_fps != NULL)
-                    tot_recs += rd_fps->number_of_items;
+                    tot_recs += rd_fps->n_items;
         }
     }
     if (tot_recs == 0)
         return PyList_New(0);
 
-    rec_ptrs = (RECORD_HEADER_m13 **) malloc((size_t) tot_recs * sizeof(RECORD_HEADER_m13 *));
+    rec_ptrs = (REC_HDR_m13 **) malloc((size_t) tot_recs * sizeof(REC_HDR_m13 *));
     n_recs = 0;
-    if (sess->record_data_fps != NULL) {
-        n_items = sess->record_data_fps->number_of_items;
-        rd = sess->record_data_fps->record_data;
+    if (sess->rec_data_fps != NULL) {
+        n_items = sess->rec_data_fps->n_items;
+        rd = sess->rec_data_fps->rec_data;
         for (i = 0; i < n_items; ++i) {
-            rh = (RECORD_HEADER_m13 *) rd;
+            rh = (REC_HDR_m13 *) rd;
             switch (rh->type_code) {
                     // excluded types
                 case REC_Term_TYPE_CODE_m13:
@@ -1230,15 +1321,15 @@ PyObject*    fill_session_records(SESSION_m13 *sess,  DATA_MATRIX_m13 *dm)
             rd += rh->total_record_bytes;
         }
     }
-    if (sess->segmented_sess_recs != NULL) {
+    if (sess->Sgmt_recs != NULL) {
         for (i = 0, j = seg_idx; i < n_segs; ++i, ++j) {
-            rd_fps = sess->segmented_sess_recs->record_data_fps[j];
+            rd_fps = &sess->rec_data_fps[j];
                 if (rd_fps == NULL)
                     continue;
-            n_items = sess->segmented_sess_recs->record_data_fps[j]->number_of_items;
-            rd = sess->segmented_sess_recs->record_data_fps[j]->record_data;
+            n_items = sess->rec_data_fps[j].n_items;
+            rd = sess->rec_data_fps[j].rec_data;
             for (k = 0; k < n_items; ++k) {
-                rh = (RECORD_HEADER_m13 *) rd;
+                rh = (REC_HDR_m13 *) rd;
                 switch (rh->type_code) {
                         // excluded tyoes
                     case REC_Term_TYPE_CODE_m13:
@@ -1258,16 +1349,16 @@ PyObject*    fill_session_records(SESSION_m13 *sess,  DATA_MATRIX_m13 *dm)
             free(rec_ptrs);
         return PyList_New(0);
     }
-    qsort((void *) rec_ptrs, n_recs, sizeof(RECORD_HEADER_m13 *), rec_compare);
+    qsort((void *) rec_ptrs, n_recs, sizeof(REC_HDR_m13 *), rec_compare);
     
     py_record_list = PyList_New(n_recs);
 
     // create python records
     for (i = 0; i < n_recs; ++i) {
         if (dm != NULL)
-            temp_record = fill_record_matrix(rec_ptrs[i], dm);
+            temp_record = fill_record_matrix((LH_m13 *) sess, rec_ptrs[i], dm, pg->time_constants.RTO_known);
         else
-            temp_record = fill_record(rec_ptrs[i]);
+            temp_record = fill_record((LH_m13 *) sess, rec_ptrs[i], pg->time_constants.RTO_known);
         PyList_SetItem(py_record_list, i, temp_record);
     }
 
@@ -1278,10 +1369,9 @@ PyObject*    fill_session_records(SESSION_m13 *sess,  DATA_MATRIX_m13 *dm)
     return py_record_list;
 }
 
-PyObject    *fill_record(RECORD_HEADER_m13 *rh)
+PyObject    *fill_record(LH_m13 *lh, REC_HDR_m13 *rh, tern relative_days)
 {
-    extern GLOBALS_m13    *globals_m13;
-    TERN_m13        relative_days;
+
     si1                     ver_str[8], *enc_str, enc_level, time_str[TIME_STRING_BYTES_m13], time_str_end[TIME_STRING_BYTES_m13];
     REC_NlxP_v10_m13        *NlxP;
     REC_CSti_v10_m13        *CSti;
@@ -1293,7 +1383,7 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
     sf8                     ver;
     
     // start time string
-    STR_time_string_m13(rh->start_time, time_str, TRUE_m13, FALSE_m13, FALSE_m13);
+    STR_time_m13(lh, rh->start_time, time_str, TRUE_m13, FALSE_m13, FALSE_m13);
 
     // version
     ver = (sf8) rh->version_major + ((sf8) rh->version_minor / (sf8) 1000.0);
@@ -1323,12 +1413,6 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
             break;
     }
     
-
-    if (globals_m13->RTO_known == TRUE_m13)
-        relative_days = FALSE_m13;
-    else
-        relative_days = TRUE_m13;
-    
     enc_level = rh->encryption_level;
     
     // create PyObject
@@ -1342,10 +1426,10 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
                                       "version_string", check_utf8(ver_str),
                                       "encryption", enc_level,
                                       "encryption_string", check_utf8(enc_str),
-                                      "text", enc_level <= 0 ? check_utf8((si1 *) rh + RECORD_HEADER_BYTES_m13) : "<no access>");
+                                      "text", enc_level <= 0 ? check_utf8((si1 *) rh + REC_HDR_BYTES_m13) : "<no access>");
             break;
         case REC_NlxP_TYPE_CODE_m13:
-            NlxP = (REC_NlxP_v10_m13 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m13);
+            NlxP = (REC_NlxP_v10_m13 *) ((ui1 *) rh + REC_HDR_BYTES_m13);
             if (enc_level <= 0) {
                 py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:I,s:I}",
                                           "start_time", rh->start_time,
@@ -1371,7 +1455,7 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
             }
             break;
         case REC_ESti_TYPE_CODE_m13:
-            ESti = (REC_ESti_v10_m13 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m13);
+            ESti = (REC_ESti_v10_m13 *) ((ui1 *) rh + REC_HDR_BYTES_m13);
             if (enc_level <= 0) {
                 py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:d,s:d,s:L,s:I,s:I,s:s,s:s,s:s}",
                                           "start_time", rh->start_time,
@@ -1409,7 +1493,7 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
             }
             break;
         case REC_CSti_TYPE_CODE_m13:
-            CSti = (REC_CSti_v10_m13 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m13);
+            CSti = (REC_CSti_v10_m13 *) ((ui1 *) rh + REC_HDR_BYTES_m13);
             if (enc_level <= 0) {
                 py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:I,s:s,s:s,s:s}",
                                           "start_time", rh->start_time,
@@ -1439,18 +1523,18 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
             }
             break;
         case REC_Sgmt_TYPE_CODE_m13:
-            Sgmt = (REC_Sgmt_v10_m13 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m13);
+            Sgmt = (REC_Sgmt_v10_m13 *) ((ui1 *) rh + REC_HDR_BYTES_m13);
             if (enc_level <= 0) {
-                STR_time_string_m13(Sgmt->end_time, time_str_end, TRUE_m13, relative_days, FALSE_m13);
+                STR_time_m13(lh, Sgmt->end_time, time_str_end, TRUE_m13, relative_days, FALSE_m13);
                 
                 valid_text = 0;;
-                if (rh->total_record_bytes > (RECORD_HEADER_BYTES_m13 + REC_Sgmt_v10_BYTES_m13)) {
-                    text = (si1 *) rh + RECORD_HEADER_BYTES_m13 + REC_Sgmt_v10_BYTES_m13;
+                if (rh->total_record_bytes > (REC_HDR_BYTES_m13 + REC_Sgmt_v10_BYTES_m13)) {
+                    text = (si1 *) rh + REC_HDR_BYTES_m13 + REC_Sgmt_v10_BYTES_m13;
                     if (*text)
                         valid_text = 1;
                 }
-                if (Sgmt->acquisition_channel_number != REC_Sgmt_v10_ACQUISITION_CHANNEL_NUMBER_ALL_CHANNELS_m13) {
-                    if (Sgmt->sampling_frequency != REC_Sgmt_v10_SAMPLING_FREQUENCY_VARIABLE_m13) {
+                if (Sgmt->acq_chan_num != REC_Sgmt_v10_ACQ_CHAN_NUM_ALL_CHANNELS_m13) {
+                    if (Sgmt->samp_freq != REC_Sgmt_v10_RATE_VARIABLE_m13) {
                         py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:I,s:d,s:s}",
                                                   "start_time", rh->start_time,
                                                   "start_time_string", check_utf8(time_str),
@@ -1461,12 +1545,12 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
                                                   "encryption_string", check_utf8(enc_str),
                                                   "end_time", Sgmt->end_time,
                                                   "end_time_string", check_utf8(time_str_end),
-                                                  "start_sample_number", Sgmt->start_sample_number,
-                                                  "end_sample_number", Sgmt->end_sample_number,
-                                                  "segment_number", Sgmt->segment_number,
-                                                  "segment_UID", Sgmt->segment_UID,
-                                                  "acquistion_channel_number", Sgmt->acquisition_channel_number,
-                                                  "sampling_frequency", Sgmt->sampling_frequency,
+                                                  "start_samp_num", Sgmt->start_samp_num,
+                                                  "end_samp_num", Sgmt->end_samp_num,
+                                                  "seg_num", Sgmt->seg_num,
+                                                  "seg_UID", Sgmt->seg_UID,
+                                                  "acquistion_channel_number", Sgmt->acq_chan_num,
+                                                  "sampling_frequency", Sgmt->samp_freq,
                                                   "description", valid_text == 1 ? check_utf8(text) : "<no description>");
                     } else {
                         py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:I,s:s,s:s}",
@@ -1479,16 +1563,16 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
                                                   "encryption_string", check_utf8(enc_str),
                                                   "end_time", Sgmt->end_time,
                                                   "end_time_string", check_utf8(time_str_end),
-                                                  "start_sample_number", Sgmt->start_sample_number,
-                                                  "end_sample_number", Sgmt->end_sample_number,
-                                                  "segment_number", Sgmt->segment_number,
-                                                  "segment_UID", Sgmt->segment_UID,
-                                                  "acquistion_channel_number", Sgmt->acquisition_channel_number ,
+                                                  "start_samp_num", Sgmt->start_samp_num,
+                                                  "end_samp_num", Sgmt->end_samp_num,
+                                                  "seg_num", Sgmt->seg_num,
+                                                  "seg_UID", Sgmt->seg_UID,
+                                                  "acquistion_channel_number", Sgmt->acq_chan_num ,
                                                   "sampling_frequency", "variable",
                                                   "description", valid_text == 1 ? check_utf8(text) : "<no description>");
                     }
                 } else {
-                    if (Sgmt->sampling_frequency != REC_Sgmt_v10_SAMPLING_FREQUENCY_VARIABLE_m13) {
+                    if (Sgmt->samp_freq != REC_Sgmt_v10_RATE_VARIABLE_m13) {
                         py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:s,s:d,s:s}",
                                                   "start_time", rh->start_time,
                                                   "start_time_string", check_utf8(time_str),
@@ -1499,12 +1583,12 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
                                                   "encryption_string", check_utf8(enc_str),
                                                   "end_time", Sgmt->end_time,
                                                   "end_time_string", check_utf8(time_str_end),
-                                                  "start_sample_number", Sgmt->start_sample_number,
-                                                  "end_sample_number", Sgmt->end_sample_number,
-                                                  "segment_number", Sgmt->segment_number,
-                                                  "segment_UID", Sgmt->segment_UID,
+                                                  "start_samp_num", Sgmt->start_samp_num,
+                                                  "end_samp_num", Sgmt->end_samp_num,
+                                                  "seg_num", Sgmt->seg_num,
+                                                  "seg_UID", Sgmt->seg_UID,
                                                   "acquistion_channel_number", "all channels",
-                                                  "sampling_frequency", Sgmt->sampling_frequency,
+                                                  "sampling_frequency", Sgmt->samp_freq,
                                                   "description", valid_text == 1 ? check_utf8(text) : "<no description>");
                     } else {
                         py_record = Py_BuildValue("{s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:s,s:s,s:s}",
@@ -1517,10 +1601,10 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
                                                   "encryption_string", check_utf8(enc_str),
                                                   "end_time", Sgmt->end_time,
                                                   "end_time_string", check_utf8(time_str_end),
-                                                  "start_sample_number", Sgmt->start_sample_number,
-                                                  "end_sample_number", Sgmt->end_sample_number,
-                                                  "segment_number", Sgmt->segment_number,
-                                                  "segment_UID", Sgmt->segment_UID,
+                                                  "start_samp_num", Sgmt->start_samp_num,
+                                                  "end_samp_num", Sgmt->end_samp_num,
+                                                  "seg_num", Sgmt->seg_num,
+                                                  "seg_UID", Sgmt->seg_UID,
                                                   "acquistion_channel_number", "all channels",
                                                   "sampling_frequency", "variable",
                                                   "description", valid_text == 1 ? check_utf8(text) : "<no description>");
@@ -1538,10 +1622,10 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
                                           "encryption_string", check_utf8(enc_str),
                                           "end_time", "<no access>",
                                           "end_time_string", "<no access>",
-                                          "start_sample_number", "<no access>",
-                                          "end_sample_number", "<no access>",
-                                          "segment_number", "<no access>",
-                                          "segment_UID", "<no access>",
+                                          "start_samp_num", "<no access>",
+                                          "end_samp_num", "<no access>",
+                                          "seg_num", "<no access>",
+                                          "seg_UID", "<no access>",
                                           "acquistion_channel_number", "<no access>",
                                           "sampling_frequency", "<no access>",
                                           "description", "<no access>");
@@ -1568,10 +1652,8 @@ PyObject    *fill_record(RECORD_HEADER_m13 *rh)
 }
 
 
-PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
+PyObject    *fill_record_matrix(LH_m13 *lh, REC_HDR_m13 *rh, DATA_MATRIX_m13 *dm, tern relative_days)
 {
-    extern GLOBALS_m13    *globals_m13;
-    TERN_m13        relative_days;
     si1                     ver_str[8], *enc_str, enc_level, time_str[TIME_STRING_BYTES_m13], time_str_end[TIME_STRING_BYTES_m13];
     REC_NlxP_v10_m13        *NlxP;
     REC_CSti_v10_m13        *CSti;
@@ -1586,7 +1668,7 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
     si1   *text;
     
     // start time string
-    STR_time_string_m13(rh->start_time, time_str, TRUE_m13, FALSE_m13, FALSE_m13);
+    STR_time_m13(lh, rh->start_time, time_str, TRUE_m13, FALSE_m13, FALSE_m13);
     
     // version
     ver = (sf8) rh->version_major + ((sf8) rh->version_minor / (sf8) 1000.0);
@@ -1615,22 +1697,16 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
             break;
     }
     
-    
-    if (globals_m13->RTO_known == TRUE_m13)
-        relative_days = FALSE_m13;
-    else
-        relative_days = TRUE_m13;
-    
     enc_level = rh->encryption_level;
     
     // start index (in matrix reference frame)
     contigua = dm->contigua;
-    for (i = 0; i < dm->number_of_contigua; ++i)
+    for (i = 0; i < dm->n_contigua; ++i)
         if (rh->start_time <= contigua[i].end_time)
             break;
     offset_secs = (sf8) (rh->start_time - contigua[i].start_time) / (sf8) 1e6;
     offset_samps = (si8) round(offset_secs * dm->sampling_frequency);
-    start_idx = contigua[i].start_sample_number + offset_samps;
+    start_idx = contigua[i].start_samp_num + offset_samps;
     // create PyObject
     switch (rh->type_code) {
         case REC_Note_TYPE_CODE_m13:
@@ -1643,10 +1719,10 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
                                       "version_string", check_utf8(ver_str),
                                       "encryption", enc_level,
                                       "encryption_string", check_utf8(enc_str),
-                                      "text", enc_level <= 0 ? check_utf8((si1 *) rh + RECORD_HEADER_BYTES_m13) : "<no access>");
+                                      "text", enc_level <= 0 ? check_utf8((si1 *) rh + REC_HDR_BYTES_m13) : "<no access>");
             break;
         case REC_NlxP_TYPE_CODE_m13:
-            NlxP = (REC_NlxP_v10_m13 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m13);
+            NlxP = (REC_NlxP_v10_m13 *) ((ui1 *) rh + REC_HDR_BYTES_m13);
             if (enc_level <= 0) {
                 py_record = Py_BuildValue("{s:L,s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:I,s:I}",
                                           "start_index", start_idx,
@@ -1674,7 +1750,7 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
             }
             break;
         case REC_ESti_TYPE_CODE_m13:
-            ESti = (REC_ESti_v10_m13 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m13);
+            ESti = (REC_ESti_v10_m13 *) ((ui1 *) rh + REC_HDR_BYTES_m13);
             if (enc_level <= 0) {
                 py_record = Py_BuildValue("{s:L,s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:d,s:d,s:L,s:I,s:I,s:s,s:s,s:s}",
                                           "start_idx", start_idx,
@@ -1714,7 +1790,7 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
             }
             break;
         case REC_CSti_TYPE_CODE_m13:
-            CSti = (REC_CSti_v10_m13 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m13);
+            CSti = (REC_CSti_v10_m13 *) ((ui1 *) rh + REC_HDR_BYTES_m13);
             if (enc_level <= 0) {
                 py_record = Py_BuildValue("{s:L,s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:s,s:s}",
                                           "start_index", start_idx,
@@ -1746,19 +1822,19 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
             }
             break;
         case REC_Sgmt_TYPE_CODE_m13:
-            Sgmt = (REC_Sgmt_v10_m13 *) ((ui1 *) rh + RECORD_HEADER_BYTES_m13);
+            Sgmt = (REC_Sgmt_v10_m13 *) ((ui1 *) rh + REC_HDR_BYTES_m13);
             if (enc_level <= 0) {
-                STR_time_string_m13(Sgmt->end_time, time_str_end, TRUE_m13, relative_days, FALSE_m13);
+                STR_time_m13(lh, Sgmt->end_time, time_str_end, TRUE_m13, relative_days, FALSE_m13);
                 
                 valid_text = 0;
-                if (rh->total_record_bytes > (RECORD_HEADER_BYTES_m13 + REC_Sgmt_v10_BYTES_m13)) {
-                    text = (si1 *) rh + RECORD_HEADER_BYTES_m13 + REC_Sgmt_v10_BYTES_m13;
+                if (rh->total_record_bytes > (REC_HDR_BYTES_m13 + REC_Sgmt_v10_BYTES_m13)) {
+                    text = (si1 *) rh + REC_HDR_BYTES_m13 + REC_Sgmt_v10_BYTES_m13;
                     if (*text)
                         valid_text = 1;
                 }
 
-                if (Sgmt->acquisition_channel_number != REC_Sgmt_v10_ACQUISITION_CHANNEL_NUMBER_ALL_CHANNELS_m13) {
-                    if (Sgmt->sampling_frequency != REC_Sgmt_v10_SAMPLING_FREQUENCY_VARIABLE_m13) {
+                if (Sgmt->acq_chan_num != REC_Sgmt_v10_ACQ_CHAN_NUM_ALL_CHANNELS_m13) {
+                    if (Sgmt->samp_freq != REC_Sgmt_v10_RATE_VARIABLE_m13) {
                         py_record = Py_BuildValue("{s:L,s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:I,s:d,s:s}",
                                                   "start_index", start_idx,
                                                   "start_time", rh->start_time,
@@ -1770,12 +1846,12 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
                                                   "encryption_string", check_utf8(enc_str),
                                                   "end_time", Sgmt->end_time,
                                                   "end_time_string", check_utf8(time_str_end),
-                                                  "start_sample_number", Sgmt->start_sample_number,
-                                                  "end_sample_number", Sgmt->end_sample_number,
-                                                  "segment_number", Sgmt->segment_number,
-                                                  "segment_UID", Sgmt->segment_UID,
-                                                  "acquistion_channel_number", Sgmt->acquisition_channel_number,
-                                                  "sampling_frequency", Sgmt->sampling_frequency,
+                                                  "start_samp_num", Sgmt->start_samp_num,
+                                                  "end_samp_num", Sgmt->end_samp_num,
+                                                  "seg_num", Sgmt->seg_num,
+                                                  "seg_UID", Sgmt->seg_UID,
+                                                  "acquistion_channel_number", Sgmt->acq_chan_num,
+                                                  "sampling_frequency", Sgmt->samp_freq,
                                                   "description", valid_text == 1 ? check_utf8(text) : "<no description>");
                     } else {
                         py_record = Py_BuildValue("{s:L,s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:I,s:s,s:s}",
@@ -1789,16 +1865,16 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
                                                   "encryption_string", check_utf8(enc_str),
                                                   "end_time", Sgmt->end_time,
                                                   "end_time_string", check_utf8(time_str_end),
-                                                  "start_sample_number", Sgmt->start_sample_number,
-                                                  "end_sample_number", Sgmt->end_sample_number,
-                                                  "segment_number", Sgmt->segment_number,
-                                                  "segment_UID", Sgmt->segment_UID,
-                                                  "acquistion_channel_number", Sgmt->acquisition_channel_number ,
+                                                  "start_samp_num", Sgmt->start_samp_num,
+                                                  "end_samp_num", Sgmt->end_samp_num,
+                                                  "seg_num", Sgmt->seg_num,
+                                                  "seg_UID", Sgmt->seg_UID,
+                                                  "acquistion_channel_number", Sgmt->acq_chan_num ,
                                                   "sampling_frequency", "variable",
                                                   "description", valid_text == 1 ? check_utf8(text) : "<no description>");
                     }
                 } else {
-                    if (Sgmt->sampling_frequency != REC_Sgmt_v10_SAMPLING_FREQUENCY_VARIABLE_m13) {
+                    if (Sgmt->samp_freq != REC_Sgmt_v10_RATE_VARIABLE_m13) {
                         py_record = Py_BuildValue("{s:L,s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:s,s:d,s:s}",
                                                   "start_index", start_idx,
                                                   "start_time", rh->start_time,
@@ -1810,12 +1886,12 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
                                                   "encryption_string", check_utf8(enc_str),
                                                   "end_time", Sgmt->end_time,
                                                   "end_time_string", check_utf8(time_str_end),
-                                                  "start_sample_number", Sgmt->start_sample_number,
-                                                  "end_sample_number", Sgmt->end_sample_number,
-                                                  "segment_number", Sgmt->segment_number,
-                                                  "segment_UID", Sgmt->segment_UID,
+                                                  "start_samp_num", Sgmt->start_samp_num,
+                                                  "end_samp_num", Sgmt->end_samp_num,
+                                                  "seg_num", Sgmt->seg_num,
+                                                  "seg_UID", Sgmt->seg_UID,
                                                   "acquistion_channel_number", "all channels",
-                                                  "sampling_frequency", Sgmt->sampling_frequency,
+                                                  "sampling_frequency", Sgmt->samp_freq,
                                                   "description", valid_text == 1 ? check_utf8(text) : "<no description>");
                     } else {
                         py_record = Py_BuildValue("{s:L,s:L,s:s,s:s,s:I,s:s,s:I,s:s,s:L,s:s,s:L,s:L,s:I,s:K,s:s,s:s,s:s}",
@@ -1829,10 +1905,10 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
                                                   "encryption_string", check_utf8(enc_str),
                                                   "end_time", Sgmt->end_time,
                                                   "end_time_string", check_utf8(time_str_end),
-                                                  "start_sample_number", Sgmt->start_sample_number,
-                                                  "end_sample_number", Sgmt->end_sample_number,
-                                                  "segment_number", Sgmt->segment_number,
-                                                  "segment_UID", Sgmt->segment_UID,
+                                                  "start_samp_num", Sgmt->start_samp_num,
+                                                  "end_samp_num", Sgmt->end_samp_num,
+                                                  "seg_num", Sgmt->seg_num,
+                                                  "seg_UID", Sgmt->seg_UID,
                                                   "acquistion_channel_number", "all channels",
                                                   "sampling_frequency", "variable",
                                                   "description", valid_text == 1 ? check_utf8(text) : "<no description>");
@@ -1851,10 +1927,10 @@ PyObject    *fill_record_matrix(RECORD_HEADER_m13 *rh, DATA_MATRIX_m13 *dm)
                                           "encryption_string", check_utf8(enc_str),
                                           "end_time", "<no access>",
                                           "end_time_string", "<no access>",
-                                          "start_sample_number", "<no access>",
-                                          "end_sample_number", "<no access>",
-                                          "segment_number", "<no access>",
-                                          "segment_UID", "<no access>",
+                                          "start_samp_num", "<no access>",
+                                          "end_samp_num", "<no access>",
+                                          "seg_num", "<no access>",
+                                          "seg_UID", "<no access>",
                                           "acquistion_channel_number", "<no access>",
                                           "sampling_frequency", "<no access>",
                                           "description", "<no access>");
@@ -1884,7 +1960,7 @@ si4     rec_compare(const void *a, const void *b)
 {
     si8    time_d;
     
-    time_d = (*((RECORD_HEADER_m13 **) a))->start_time - (*((RECORD_HEADER_m13 **) b))->start_time;
+    time_d = (*((REC_HDR_m13 **) a))->start_time - (*((REC_HDR_m13 **) b))->start_time;
     
     // sort by time
     if (time_d > 0)
@@ -1893,7 +1969,7 @@ si4     rec_compare(const void *a, const void *b)
         return(-1);
     
     // if same time, sort by location in memory
-    if ((ui8) *((RECORD_HEADER_m13 **) a) > (ui8) *((RECORD_HEADER_m13 **) a))
+    if ((ui8) *((REC_HDR_m13 **) a) > (ui8) *((REC_HDR_m13 **) a))
         return(1);
     
     return(-1);
@@ -1902,8 +1978,8 @@ si4     rec_compare(const void *a, const void *b)
 
 PyObject            *get_dm(PyObject *self, PyObject *args)
 {
-
-    SESSION_m13             *sess;
+    PROC_GLOBS_m13          *pg;
+    SESS_m13                *sess;
     PyObject                *sess_capsule_object, *dm_capsule_obj;
     PyObject                *start_time_input_obj, *end_time_input_obj;
     PyObject                *start_index_input_obj, *end_index_input_obj;
@@ -1919,7 +1995,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     si1            time_str_start[TIME_STRING_BYTES_m13];
     si1            time_str_end[TIME_STRING_BYTES_m13];
     si8            i, k;
-    TIME_SLICE_m13        *slice, local_time_slice;
+    SLICE_m13        *slice, local_time_slice;
     si4            seg_idx;
 
     DATA_MATRIX_m13         *dm;
@@ -1934,7 +2010,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     PyObject *py_string_object;
     PyArrayObject *mins, *maxs;
     npy_intp dims[2];
-    TERN_m13   channel_major, return_records;
+    tern   return_records;
     si4 n_chans, n_active_chans;
 
 
@@ -1971,18 +2047,19 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     }
 
     // Get session struct from python object
-    sess = (SESSION_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
+    sess = (SESS_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
     dm = (DATA_MATRIX_m13*) PyCapsule_GetPointer(dm_capsule_obj, "dm");
+    pg = G_proc_globs_m13((LH_m13 *) sess);
 
     // set defaults, in case args are NULL/None
-    sampling_frequency = FREQUENCY_NO_ENTRY_m13;
+    sampling_frequency = TS_METADATA_FREQUENCY_NO_ENTRY_m13;
     n_out_samps = NUMBER_OF_SAMPLES_NO_ENTRY_m13;
     return_records = TRUE_m13;
 
     slice = &local_time_slice; // this takes care of freeing memory
-    G_initialize_time_slice_m13(slice);
+    G_init_slice_m13(slice);
     initialize_time_slice(slice, start_index_input_obj, end_index_input_obj, start_time_input_obj, end_time_input_obj);
-    //G_show_time_slice_m13(slice);
+    //G_show_SLICE_m13(slice);
 
     // process n_out_samps
     if (n_out_samps_obj != NULL)
@@ -2017,7 +2094,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
             if (n_out_samps == NUMBER_OF_SAMPLES_NO_ENTRY_m13)
                 sampling_frequency = DM_MAXIMUM_INPUT_FREQUENCY_m13;
             else
-                sampling_frequency = FREQUENCY_NO_ENTRY_m13;
+                sampling_frequency = TS_METADATA_FREQUENCY_NO_ENTRY_m13;
         } else {
             PyErr_SetString(PyExc_RuntimeError, "sampling_frequency (input 7) must be specified as a float\n");
             PyErr_Occurred();
@@ -2043,7 +2120,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
         }
     }
 
-    n_chans = sess->number_of_time_series_channels;
+    n_chans = sess->n_ts_chans;
 
     // Get data matrix pointer
 
@@ -2066,7 +2143,7 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
         PyErr_Occurred();
         return(NULL);
     }
-    //show_time_slice_m13(&sess->time_slice);
+    //show_SLICE_m13(&sess->slice);
 
     if (dm->flags & DM_FMT_CHANNEL_MAJOR_m13) {
         dims[0] = dm->channel_count;
@@ -2080,28 +2157,28 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
 
     // Build contigua if desired
     if (dm->flags & DM_DSCNT_CONTIG_m13)
-        py_contigua = build_contigua_dm(dm);
+        py_contigua = build_contigua_dm((LH_m13 *) sess, dm, pg->time_constants.RTO_known);
     else
         py_contigua = Py_None;
 
-    STR_time_string_m13(sess->time_slice.start_time, time_str_start, TRUE_m13, FALSE_m13, FALSE_m13);
-    STR_time_string_m13(sess->time_slice.end_time, time_str_end, TRUE_m13, FALSE_m13, FALSE_m13);
+    STR_time_m13((LH_m13 *) sess, sess->slice.start_time, time_str_start, TRUE_m13, FALSE_m13, FALSE_m13);
+    STR_time_m13((LH_m13 *) sess, sess->slice.end_time, time_str_end, TRUE_m13, FALSE_m13, FALSE_m13);
 
     n_active_chans = dm->channel_count;
 
     // Fill in channel names and sampling frequencies
     py_sampling_frequencies = PyList_New(n_active_chans);
     py_channel_names = PyList_New(n_active_chans);
-    slice = &sess->time_slice;
-    seg_idx = G_get_segment_index_m13(slice->start_segment_number);
+    slice = &sess->slice;
+    seg_idx = G_segment_index_m13((LH_m13 *) sess, slice->start_seg_num);
     for (i = k = 0; k < n_chans; ++k) {
-        if ((sess->time_series_channels[k]->flags & LH_CHANNEL_ACTIVE_m13) == 0)
+        if ((sess->ts_chans[k]->flags & LH_CHAN_ACTIVE_m13) == 0)
             continue;
 
-        py_float_object = PyFloat_FromDouble(sess->time_series_channels[k]->segments[seg_idx]->metadata_fps->metadata->time_series_section_2.sampling_frequency);
+        py_float_object = PyFloat_FromDouble(sess->ts_chans[k]->segs[seg_idx]->metadata_fps->metadata->time_series_section_2.sampling_frequency);
         PyList_SetItem(py_sampling_frequencies, i, py_float_object);
 
-        py_string_object = PyUnicode_FromString(sess->time_series_channels[k]->name);
+        py_string_object = PyUnicode_FromString(sess->ts_chans[k]->name);
         PyList_SetItem(py_channel_names, i, py_string_object);
 
         i++;
@@ -2164,10 +2241,8 @@ PyObject            *get_dm(PyObject *self, PyObject *args)
     return raw_page;
 }
 
-PyObject*    build_contigua_dm(DATA_MATRIX_m13 *dm)
+PyObject*    build_contigua_dm(LH_m13 *lh, DATA_MATRIX_m13 *dm, tern relative_days)
 {
-    extern GLOBALS_m13        *globals_m13;
-    TERN_m13            relative_days;
     si1                             time_str_start[TIME_STRING_BYTES_m13];
     si1                             time_str_end[TIME_STRING_BYTES_m13];
     si8                             i, n_contigs;
@@ -2176,30 +2251,25 @@ PyObject*    build_contigua_dm(DATA_MATRIX_m13 *dm)
     PyObject  *py_contigua_list;
     
     
-    n_contigs = dm->number_of_contigua;
+    n_contigs = dm->n_contigua;
     
     py_contigua_list = PyList_New(n_contigs);
     
     if (n_contigs <= 0)
         return py_contigua_list;
     
-    if (globals_m13->RTO_known == TRUE_m13)
-        relative_days = FALSE_m13;
-    else
-        relative_days = TRUE_m13;
-    
     contigua = dm->contigua;
     
     for (i = 0; i < n_contigs; ++i) {
         
         // start time string
-        STR_time_string_m13(contigua[i].start_time, time_str_start, TRUE_m13, relative_days, FALSE_m13);
+        STR_time_m13(lh, contigua[i].start_time, time_str_start, TRUE_m13, relative_days, FALSE_m13);
         // end time string
-        STR_time_string_m13(contigua[i].end_time, time_str_end, TRUE_m13, relative_days, FALSE_m13);
-        
+        STR_time_m13(lh, contigua[i].end_time, time_str_end, TRUE_m13, relative_days, FALSE_m13);
+
         py_contiguon = Py_BuildValue("{s:L,s:L,s:L,s:s,s:L,s:s}",
-                                     "start_index", contigua[i].start_sample_number,
-                                     "end_index", contigua[i].end_sample_number,
+                                     "start_index", contigua[i].start_samp_num,
+                                     "end_index", contigua[i].end_samp_num,
                                      "start_time", contigua[i].start_time,
                                      "start_time_string", time_str_start,
                                      "end_time", contigua[i].end_time,
@@ -2214,7 +2284,7 @@ PyObject*    build_contigua_dm(DATA_MATRIX_m13 *dm)
 
 PyObject *sort_channels_by_acq_num(PyObject *self, PyObject *args)
 {
-    SESSION_m13             *sess;
+    SESS_m13             *sess;
     PyObject                *sess_capsule_object;
     
     // --- Parse the input ---
@@ -2243,10 +2313,10 @@ PyObject *sort_channels_by_acq_num(PyObject *self, PyObject *args)
 
 PyObject *read_lh_flags(PyObject *self, PyObject *args)
 {
-    SESSION_m13             *sess;
-    CHANNEL_m13             *chan;
-    SEGMENT_m13             *seg;
-    TIME_SLICE_m13          *slice;
+    SESS_m13             *sess;
+    CHAN_m13             *chan;
+    SEG_m13             *seg;
+    SLICE_m13          *slice;
     PyObject                *sess_capsule_object;
     PyObject                *py_session_dict;
     PyObject                *py_channels_dict, *py_channel_dict;
@@ -2282,18 +2352,18 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
     py_session_dict = Py_BuildValue("{s:O}",
                                     "session_flags", bit_list);
 
-    n_channels = sess->number_of_time_series_channels;
+    n_channels = sess->n_ts_chans;
 
     py_channels_dict = PyDict_New();
-    for (i=0; i<sess->number_of_time_series_channels; ++i) {
-        chan = sess->time_series_channels[i];
+    for (i=0; i<sess->n_ts_chans; ++i) {
+        chan = sess->ts_chans[i];
         flags = chan->header.flags;
-        slice = &chan->time_slice;
+        slice = &chan->slice;
 
-        if (slice->number_of_segments == UNKNOWN_m13) {
-            n_segs = G_get_segment_range_m13((LEVEL_HEADER_m13 *) chan, slice);
+        if (slice->n_segs == UNKNOWN_m13) {
+            n_segs = G_segment_range_m13((LH_m13 *) chan, slice);
         } else {
-            n_segs = slice->number_of_segments;
+            n_segs = slice->n_segs;
         }
 
         // Create channel dict and set channel level flags
@@ -2309,7 +2379,7 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
 
         py_segments_dict = PyDict_New();
         for (j=0; j<n_segs; ++j) {
-            seg = chan->segments[j];
+            seg = chan->segs[j];
             flags = seg->header.flags;
             // Create segment dict and set segment level flags
             n_bits = sizeof(ui8) * 8;
@@ -2343,10 +2413,10 @@ PyObject *read_lh_flags(PyObject *self, PyObject *args)
 
 PyObject *push_lh_flags(PyObject *self, PyObject *args)
 {
-    SESSION_m13             *sess;
-    CHANNEL_m13             *chan;
-    SEGMENT_m13             *seg;
-    TIME_SLICE_m13          *slice;
+    SESS_m13             *sess;
+    CHAN_m13             *chan;
+    SEG_m13             *seg;
+    SLICE_m13          *slice;
     PyObject                *sess_capsule_object;
     PyObject                *py_channels_dict, *py_channel_dict;
     PyObject                *py_segments_dict, *py_segment_dict;
@@ -2405,9 +2475,9 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
         return Py_None;
     }
 
-    for (i=0; i<sess->number_of_time_series_channels; ++i) {
-        chan = sess->time_series_channels[i];
-        slice = &chan->time_slice;
+    for (i=0; i<sess->n_ts_chans; ++i) {
+        chan = sess->ts_chans[i];
+        slice = &chan->slice;
 
         // Check if the channel is in the channels dictionary
         py_channel_dict = PyDict_GetItemString(py_channels_dict, chan->name);
@@ -2448,14 +2518,14 @@ PyObject *push_lh_flags(PyObject *self, PyObject *args)
             continue;
         }
 
-        if (slice->number_of_segments == UNKNOWN_m13) {
-            n_segs = G_get_segment_range_m13((LEVEL_HEADER_m13 *) chan, slice);
+        if (slice->n_segs == UNKNOWN_m13) {
+            n_segs = G_segment_range_m13((LH_m13 *) chan, slice);
         } else {
-            n_segs = slice->number_of_segments;
+            n_segs = slice->n_segs;
         }
 
         for (j=0; j<n_segs; ++j) {
-            seg = chan->segments[j];
+            seg = chan->segs[j];
 
             // Check if the segment is in the segments dictionary
             py_segment_dict = PyDict_GetItemString(py_segments_dict, seg->name);
@@ -2593,18 +2663,18 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
 
 //PyObject *set_single_channel_active(PyObject *self, PyObject *args)
 //{
-//    SESSION_m13             *sess;
-//    TERN_m13                all, none;
-//    TERN_m13                is_active;
+//    SESS_m13             *sess;
+//    tern                all, none;
+//    tern                is_active;
 //    PyObject                *pointers_obj, *chan_name_obj, *is_active_obj;
 //    PyObject                *temp_UTF_str;
 //    si1                     *temp_str_bytes;
 //    PyObject                *seq;
 //    PyObject                *item;
-//    si1                     chan_name[BASE_FILE_NAME_BYTES_m13];
+//    si1                     chan_name[NAME_BYTES_m13];
 //    si8                     i, n_active_chans;
-//    CHANNEL_m13             *chan;
-//    si1                     reference_chan_temp[BASE_FILE_NAME_BYTES_m13];
+//    CHAN_m13             *chan;
+//    si1                     reference_chan_temp[NAME_BYTES_m13];
 //
 //
 //
@@ -2674,20 +2744,20 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
 //    item=PyIter_Next(seq);
 //    //globals_m13 = (GLOBALS_m13*) (PyLong_AsLongLong(item));
 //    item=PyIter_Next(seq);
-//    sess = (SESSION_m13*) (PyLong_AsLongLong(item));
+//    sess = (SESS_m13*) (PyLong_AsLongLong(item));
 //    //sess = change_pointer(sess, globals_m13);
 //
 //    strcpy(reference_chan_temp, globals_m13->reference_channel_name);
 //
-//    for (i = n_active_chans = 0; i < sess->number_of_time_series_channels; ++i) {
-//        chan = sess->time_series_channels[i];
+//    for (i = n_active_chans = 0; i < sess->n_ts_chans; ++i) {
+//        chan = sess->ts_chans[i];
 //
 //        if ((strcmp(chan_name, chan->name) == 0) || (all == TRUE_m13)) {
 //            if (is_active == TRUE_m13) {
-//                chan->flags |= LH_CHANNEL_ACTIVE_m13;
+//                chan->flags |= LH_CHAN_ACTIVE_m13;
 //                //printf("Turning chan %s on\n", chan->name);
 //            } else {
-//                chan->flags &= ~LH_CHANNEL_ACTIVE_m13;
+//                chan->flags &= ~LH_CHAN_ACTIVE_m13;
 //                //printf("Turning chan %s off\n", chan->name);
 //                //if (!strcmp(chan->name, reference_chan_temp))
 //                //    printf("Warning: %s is the reference channel, and is now inactive. Please set a new reference channel, if reading by index values.\n", chan->name);
@@ -2701,14 +2771,30 @@ PyObject *push_dm_flags(PyObject *self, PyObject *args)
 
 PyObject *get_channel_reference(PyObject *self, PyObject *args)
 {
-    return PyUnicode_FromString(globals_m13->reference_channel_name);
+    extern GLOBALS_m13      *globals_m13;
+    PROC_GLOBS_m13          *pg;
+    SESS_m13                *sess;
+    PyObject                *sess_capsule_object;
+
+    if (!PyArg_ParseTuple(args,"O",
+                          &sess_capsule_object)){
+
+        PyErr_SetString(PyExc_RuntimeError, "1 inputs required: pointers\n");
+        PyErr_Occurred();
+        return NULL;
+                          }
+
+    sess = (SESS_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
+    pg = G_proc_globs_m13((LH_m13 *) sess);
+
+    return PyUnicode_FromString(pg->current_session.index_channel_name);
 }
 
 PyObject *set_channel_reference(PyObject *self, PyObject *args)
 {
-    SESSION_m13             *sess;
+    SESS_m13             *sess;
     PyObject                *sess_capsule_object, *chan_name_obj;
-    si1                     chan_name[BASE_FILE_NAME_BYTES_m13];
+    si1                     chan_name[NAME_BYTES_m13];
     PyObject                *temp_UTF_str;
     si1                     *temp_str_bytes;
 
@@ -2725,7 +2811,7 @@ PyObject *set_channel_reference(PyObject *self, PyObject *args)
         return NULL;
     }
         
-    sess = (SESSION_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
+    sess = (SESS_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
     
     if (chan_name_obj != NULL)
     {
@@ -2738,9 +2824,7 @@ PyObject *set_channel_reference(PyObject *self, PyObject *args)
                 PyErr_Occurred();
                 return NULL;
             }
-            else {
-                sprintf(chan_name, "%s", temp_str_bytes);
-            }
+            sprintf(chan_name, "%s", temp_str_bytes);
         } else {
             PyErr_SetString(PyExc_RuntimeError, "chan_name (input 2) can be specified as a string\n");
             PyErr_Occurred();
@@ -2748,7 +2832,7 @@ PyObject *set_channel_reference(PyObject *self, PyObject *args)
         }
     }
     
-    G_change_reference_channel_m13(sess, NULL, chan_name, DEFAULT_CHANNEL_m13);
+    G_change_index_chan_m13(sess, NULL, chan_name, DEFAULT_CHAN_m13);
 
     Py_INCREF(Py_None);
     return Py_None;
@@ -2757,12 +2841,34 @@ PyObject *set_channel_reference(PyObject *self, PyObject *args)
 
 PyObject *get_globals_number_of_session_samples(PyObject *self, PyObject *args)
 {
-    return PyLong_FromLongLong(globals_m13->number_of_session_samples);
+    extern GLOBALS_m13      *globals_m13;
+    PROC_GLOBS_m13          *pg;
+    SESS_m13                *sess;
+    CHAN_m13                *chan;
+    si8                     n_contigua;
+    si8                     n_samples;
+    PyObject                *sess_capsule_object;
+
+    if (!PyArg_ParseTuple(args,"O",
+                          &sess_capsule_object)){
+
+        PyErr_SetString(PyExc_RuntimeError, "1 inputs required: pointers\n");
+        PyErr_Occurred();
+        return NULL;
+                          }
+
+    sess = (SESS_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
+    pg = G_proc_globs_m13((LH_m13 *) sess);
+    chan = pg->active_channels.maximum_sampling_frequency_channel;
+    n_contigua = chan->n_contigua;
+    n_samples = chan->contigua[n_contigua-1].end_samp_num;
+
+    return PyLong_FromLongLong(n_samples);
 }
 
 PyObject *find_discontinuities(PyObject *self, PyObject *args)
 {
-    SESSION_m13             *sess;
+    SESS_m13             *sess;
     PyObject                *sess_capsule_object;
     si8                     i, num_contigua;
     CONTIGUON_m13           *contigua;
@@ -2777,7 +2883,7 @@ PyObject *find_discontinuities(PyObject *self, PyObject *args)
         return NULL;
     }
         
-    sess = (SESSION_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
+    sess = (SESS_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
 
     if (sess == NULL) {
         PyErr_SetString(PyExc_RuntimeError, "Invalid session pointer\n");
@@ -2785,35 +2891,33 @@ PyObject *find_discontinuities(PyObject *self, PyObject *args)
         return NULL;
     }
 
-    PySys_WriteStdout("[dhnmed_file.c] The reference channel is now set to: %s\n", globals_m13->reference_channel_name);
-
     // find contiguous segments
-    contigua = G_find_discontinuities_m13((LEVEL_HEADER_m13 *) sess, &num_contigua);
+    contigua = G_find_discontinuities_m13((LH_m13 *) sess, &num_contigua);
     
     py_contigua = PyList_New(num_contigua);
     
     for (i=0; i<num_contigua; ++i) {
         
         py_contiguon = Py_BuildValue("{s:L,s:L,s:L,s:L}",
-                                     "start_index", contigua[i].start_sample_number,
-                                     "end_index", contigua[i].end_sample_number,
+                                     "start_index", contigua[i].start_samp_num,
+                                     "end_index", contigua[i].end_samp_num,
                                      "start_time", contigua[i].start_time,
                                      "end_time", contigua[i].end_time);
         
         PyList_SetItem(py_contigua, i, py_contiguon);
     }
     
-    free_m13(contigua, __FUNCTION__);
+    free_m13(contigua);
 
     return py_contigua;
 }
 
 PyObject *get_session_records(PyObject *self, PyObject *args)
 {
-    SESSION_m13             *sess;
+    SESS_m13             *sess;
     PyObject                *sess_capsule_object;
     si8                     start_time, end_time;
-    TIME_SLICE_m13          local_sess_slice, *slice;
+    SLICE_m13          local_sess_slice, *slice;
     ui8                     flags;
     PyObject                *start_time_input_obj, *end_time_input_obj;
     PyObject                *start_index_input_obj, *end_index_input_obj;
@@ -2841,13 +2945,13 @@ PyObject *get_session_records(PyObject *self, PyObject *args)
         return NULL;
     }
         
-    sess = (SEGMENT_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
+    sess = (SESS_m13*) PyCapsule_GetPointer(sess_capsule_object, "session");
 
     // read session to get records
     slice = &local_sess_slice;
-    G_initialize_time_slice_m13(slice);
+    G_init_slice_m13(slice);
     initialize_time_slice(slice, start_index_input_obj, end_index_input_obj, start_time_input_obj, end_time_input_obj);
-//    G_show_time_slice_m13(slice);
+//    G_show_SLICE_m13(slice);
 
     G_read_session_m13(sess, slice);
 
