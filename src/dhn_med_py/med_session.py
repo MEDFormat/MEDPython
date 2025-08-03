@@ -66,21 +66,21 @@ class MedDataMatrix:
         dm_flags = self._get_dm_flags()
 
         # Data type
-        dm_flags['DM_TYPE_SF8_m12'] = True
+        dm_flags['DM_TYPE_SF8_m13'] = True
 
         # Major dimension
-        dm_flags['DM_FMT_CHANNEL_MAJOR_m12'] = True
+        dm_flags['DM_FMT_CHANNEL_MAJOR_m13'] = True
 
         # Data operator flags
-        dm_flags['DM_FILT_ANTIALIAS_m12'] = True
-        dm_flags['DM_DETREND_m12'] = False
-        dm_flags['DM_TRACE_RANGES_m12'] = False
+        dm_flags['DM_FILT_ANTIALIAS_m13'] = True
+        dm_flags['DM_DETREND_m13'] = False
+        dm_flags['DM_TRACE_RANGES_m13'] = False
 
         # Misc
-        dm_flags['DM_EXTMD_RELATIVE_LIMITS_m12'] = True
-        dm_flags['DM_DSCNT_CONTIG_m12'] = True
-        dm_flags['DM_INTRP_UP_MAKIMA_DN_LINEAR_m12'] = True
-        dm_flags['DM_EXTMD_SAMP_COUNT_m12'] = True
+        dm_flags['DM_EXTMD_RELATIVE_LIMITS_m13'] = True
+        dm_flags['DM_DSCNT_CONTIG_m13'] = True
+        dm_flags['DM_INTRP_UP_MAKIMA_DN_LINEAR_m13'] = True
+        dm_flags['DM_EXTMD_SAMP_COUNT_m13'] = True
 
         self._set_dm_flags(dm_flags)
 
@@ -117,15 +117,15 @@ class MedDataMatrix:
     def filter_type(self):
         dm_flags = self._get_dm_flags()
 
-        if dm_flags['DM_FILT_ANTIALIAS_m12']:
+        if dm_flags['DM_FILT_ANTIALIAS_m13']:
             return 'antialias'
-        elif dm_flags['DM_FILT_LOWPASS_m12']:
+        elif dm_flags['DM_FILT_LOWPASS_m13']:
             return 'lowpass'
-        elif dm_flags['DM_FILT_HIGHPASS_m12']:
+        elif dm_flags['DM_FILT_HIGHPASS_m13']:
             return 'highpass'
-        elif dm_flags['DM_FILT_BANDPASS_m12']:
+        elif dm_flags['DM_FILT_BANDPASS_m13']:
             return 'bandpass'
-        elif dm_flags['DM_FILT_BANDSTOP_m12']:
+        elif dm_flags['DM_FILT_BANDSTOP_m13']:
             return 'bandstop'
         else:
             return 'none'
@@ -159,29 +159,29 @@ class MedDataMatrix:
         dm_flags = self._get_dm_flags()
 
         if filter_type == 'antialias':
-            dm_flags['DM_FILT_ANTIALIAS_m12'] = True
+            dm_flags['DM_FILT_ANTIALIAS_m13'] = True
         else:
-            dm_flags['DM_FILT_ANTIALIAS_m12'] = False
+            dm_flags['DM_FILT_ANTIALIAS_m13'] = False
 
         if filter_type == 'lowpass':
-            dm_flags['DM_FILT_LOWPASS_m12'] = True
+            dm_flags['DM_FILT_LOWPASS_m13'] = True
         else:
-            dm_flags['DM_FILT_LOWPASS_m12'] = False
+            dm_flags['DM_FILT_LOWPASS_m13'] = False
 
         if filter_type == 'highpass':
-            dm_flags['DM_FILT_HIGHPASS_m12'] = True
+            dm_flags['DM_FILT_HIGHPASS_m13'] = True
         else:
-            dm_flags['DM_FILT_HIGHPASS_m12'] = False
+            dm_flags['DM_FILT_HIGHPASS_m13'] = False
 
         if filter_type == 'bandpass':
-            dm_flags['DM_FILT_BANDPASS_m12'] = True
+            dm_flags['DM_FILT_BANDPASS_m13'] = True
         else:
-            dm_flags['DM_FILT_BANDPASS_m12'] = False
+            dm_flags['DM_FILT_BANDPASS_m13'] = False
 
         if filter_type == 'bandstop':
-            dm_flags['DM_FILT_BANDSTOP_m12'] = True
+            dm_flags['DM_FILT_BANDSTOP_m13'] = True
         else:
-            dm_flags['DM_FILT_BANDSTOP_m12'] = False
+            dm_flags['DM_FILT_BANDSTOP_m13'] = False
 
         self._set_dm_flags(dm_flags)
 
@@ -190,7 +190,7 @@ class MedDataMatrix:
 
         dm_flags = self._get_dm_flags()
 
-        return dm_flags['DM_DETREND_m12']
+        return dm_flags['DM_DETREND_m13']
 
     @detrend.setter
     def detrend(self, detrend):
@@ -207,7 +207,7 @@ class MedDataMatrix:
         """
         dm_flags = self._get_dm_flags()
 
-        dm_flags['DM_DETREND_m12'] = detrend
+        dm_flags['DM_DETREND_m13'] = detrend
 
         self._set_dm_flags(dm_flags)
 
@@ -218,7 +218,7 @@ class MedDataMatrix:
 
         dm_flags = self._get_dm_flags()
 
-        return dm_flags['DM_TRACE_RANGES_m12']
+        return dm_flags['DM_TRACE_RANGES_m13']
 
     @trace_ranges.setter
     def trace_ranges(self, trace_ranges):
@@ -243,7 +243,7 @@ class MedDataMatrix:
         """
         dm_flags = self._get_dm_flags()
 
-        dm_flags['DM_TRACE_RANGES_m12'] = trace_ranges
+        dm_flags['DM_TRACE_RANGES_m13'] = trace_ranges
 
         self._set_dm_flags(dm_flags)
 
@@ -254,7 +254,7 @@ class MedDataMatrix:
 
         dm_flags = self._get_dm_flags()
 
-        if dm_flags['DM_FMT_CHANNEL_MAJOR_m12']:
+        if dm_flags['DM_FMT_CHANNEL_MAJOR_m13']:
             return 'channel'
         else:
             return 'sample'
@@ -297,11 +297,11 @@ class MedDataMatrix:
         dm_flags = self._get_dm_flags()
 
         if major_dimension == 'channel':
-            dm_flags['DM_FMT_CHANNEL_MAJOR_m12'] = True
-            dm_flags['DM_FMT_SAMPLE_MAJOR_m12'] = False
+            dm_flags['DM_FMT_CHANNEL_MAJOR_m13'] = True
+            dm_flags['DM_FMT_SAMPLE_MAJOR_m13'] = False
         else:
-            dm_flags['DM_FMT_CHANNEL_MAJOR_m12'] = False
-            dm_flags['DM_FMT_SAMPLE_MAJOR_m12'] = True
+            dm_flags['DM_FMT_CHANNEL_MAJOR_m13'] = False
+            dm_flags['DM_FMT_SAMPLE_MAJOR_m13'] = True
 
         self._set_dm_flags(dm_flags)
 
@@ -366,11 +366,11 @@ class MedDataMatrix:
 
         dm_flags = self._get_dm_flags()
         if sampling_frequency is not None:
-            dm_flags['DM_EXTMD_SAMP_FREQ_m12'] = True
-            dm_flags['DM_EXTMD_SAMP_COUNT_m12'] = False
+            dm_flags['DM_EXTMD_SAMP_FREQ_m13'] = True
+            dm_flags['DM_EXTMD_SAMP_COUNT_m13'] = False
         else:
-            dm_flags['DM_EXTMD_SAMP_FREQ_m12'] = False
-            dm_flags['DM_EXTMD_SAMP_COUNT_m12'] = True
+            dm_flags['DM_EXTMD_SAMP_FREQ_m13'] = False
+            dm_flags['DM_EXTMD_SAMP_COUNT_m13'] = True
         self._set_dm_flags(dm_flags)
 
         self.matrix = get_dm(self.__sess_capsule,
@@ -436,11 +436,11 @@ class MedDataMatrix:
 
         dm_flags = self._get_dm_flags()
         if sampling_frequency is not None:
-            dm_flags['DM_EXTMD_SAMP_FREQ_m12'] = True
-            dm_flags['DM_EXTMD_SAMP_COUNT_m12'] = False
+            dm_flags['DM_EXTMD_SAMP_FREQ_m13'] = True
+            dm_flags['DM_EXTMD_SAMP_COUNT_m13'] = False
         else:
-            dm_flags['DM_EXTMD_SAMP_FREQ_m12'] = False
-            dm_flags['DM_EXTMD_SAMP_COUNT_m12'] = True
+            dm_flags['DM_EXTMD_SAMP_FREQ_m13'] = False
+            dm_flags['DM_EXTMD_SAMP_COUNT_m13'] = True
         self._set_dm_flags(dm_flags)
 
         self.matrix = get_dm(self.__sess_capsule,
@@ -527,16 +527,16 @@ class MedSession:
         # Set default flags
         lh_flags = self._get_lh_flags()
 
-        #lh_flags['session_level_lh_flags']['LH_INCLUDE_TIME_SERIES_CHANNELS_m12'] = True
-        lh_flags['session_level_lh_flags']['LH_EXCLUDE_VIDEO_CHANNELS_m12'] = True
-        lh_flags['session_level_lh_flags']['LH_MAP_ALL_TIME_SERIES_CHANNELS_m12'] = True
-        lh_flags['session_level_lh_flags']['LH_MAP_ALL_SEGMENTS_m12'] = True
-        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SESSION_RECORDS_m12'] = True
-        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEGMENTED_SESS_RECS_m12'] = True
-        lh_flags['session_level_lh_flags']['LH_READ_SLICE_CHANNEL_RECORDS_m12'] = True
-        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEGMENT_RECORDS_m12'] = True
-        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEGMENT_DATA_m12'] = True
-        lh_flags['session_level_lh_flags']['LH_GENERATE_EPHEMERAL_DATA_m12'] = True
+        #lh_flags['session_level_lh_flags']['LH_INCLUDE_TIME_SERIES_CHANNELS_m13'] = True
+        lh_flags['session_level_lh_flags']['LH_EXCLUDE_VID_CHANS_m13'] = True
+        lh_flags['session_level_lh_flags']['LH_MAP_ALL_TS_CHANS_m13'] = True
+        lh_flags['session_level_lh_flags']['LH_MAP_ALL_SEGS_m13'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SESS_RECS_m13'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEG_SESS_RECS_m13'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_CHAN_RECS_m13'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEG_RECS_m13'] = True
+        lh_flags['session_level_lh_flags']['LH_READ_SLICE_SEG_DATA_m13'] = True
+        lh_flags['session_level_lh_flags']['LH_GENERATE_EPHEMERAL_DATA_m13'] = True
         self._set_lh_flags(lh_flags)
       
         if password is not None:
@@ -717,7 +717,7 @@ class MedSession:
             curr_active_channels = []
             lh_flags = self._get_lh_flags()
             for channel in channel_names:
-                if lh_flags['channels'][channel]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] is True:
+                if lh_flags['channels'][channel]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m13'] is True:
                     curr_active_channels.append(channel)
             self.set_channel_active(channel_names, False)
             self.set_channel_active(channels, True)
@@ -798,7 +798,7 @@ class MedSession:
             curr_active_channels = []
             lh_flags = self._get_lh_flags()
             for channel in channel_names:
-                if lh_flags['channels'][channel]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] is True:
+                if lh_flags['channels'][channel]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m13'] is True:
                     curr_active_channels.append(channel)
             self.set_channel_active(channel_names, False)
             self.set_channel_active(channels, True)
@@ -886,11 +886,11 @@ class MedSession:
             for chan in chan_name:
                 if chan not in lh_flags['channels'].keys():
                     raise MedSession.InvalidArgumentException(f"Channel name {chan} not found in session.")
-                lh_flags['channels'][chan]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] = is_active
+                lh_flags['channels'][chan]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m13'] = is_active
         elif type(chan_name) is str:
             if chan_name not in lh_flags['channels'].keys():
                 raise MedSession.InvalidArgumentException(f"Channel name {chan} not found in session.")
-            lh_flags['channels'][chan_name]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m12'] = is_active
+            lh_flags['channels'][chan_name]['channel_level_lh_flags']['LH_CHANNEL_ACTIVE_m13'] = is_active
         else:
             raise MedSession.InvalidArgumentException("Argument must be either a list or a string.")
 
