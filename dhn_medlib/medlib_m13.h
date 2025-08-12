@@ -907,7 +907,7 @@ typedef struct {
 #define TS_METADATA_REFERENCE_DESCRIPTION_OFFSET_m13			8192 // utf8[255]
 #define TS_METADATA_REFERENCE_DESCRIPTION_BYTES_m13			1024
 #define TS_METADATA_SAMPLING_FREQUENCY_OFFSET_m13			9216 // sf8
-#define TS_METADATA_FREQUENCY_NO_ENTRY_m13				FREQUENCY_NO_ENTRY_m13
+#define TS_METADATA_FREQUENCY_NO_ENTRY_m13				RATE_NO_ENTRY_m13
 #define TS_METADATA_FREQUENCY_VARIABLE_m13				RATE_VARIABLE_m13
 #define TS_METADATA_LOW_FREQUENCY_FILTER_SETTING_OFFSET_m13		9224 // sf8
 #define TS_METADATA_HIGH_FREQUENCY_FILTER_SETTING_OFFSET_m13		9232 // sf8
@@ -1111,24 +1111,27 @@ typedef struct {
 #define LH_UPDATE_EPHEMERAL_DATA_m13		((ui8) 1 << 2) // signal to higher level from lower level (reset by higher level after update)
 
 // session level
-#define LH_EXCLUDE_TS_CHANS_m13			((ui8) 1 << 8) // useful when session directory passed, but don't want time series channels
-#define LH_EXCLUDE_VID_CHANS_m13		((ui8) 1 << 9) // useful when session directory passed, but don't want video channels
-#define LH_MAP_ALL_TS_CHANS_m13			((ui8) 1 << 10) // useful when time series channels may be added to open session
-#define LH_MAP_ALL_VID_CHANS_m13		((ui8) 1 << 11) // useful when video channels may be added to open session
+#define LH_SESS_OPEN_m13			((ui8) 1 << 8) // session has been opened
+#define LH_EXCLUDE_TS_CHANS_m13			((ui8) 1 << 9) // useful when session directory passed, but don't want time series channels
+#define LH_EXCLUDE_VID_CHANS_m13		((ui8) 1 << 10) // useful when session directory passed, but don't want video channels
+#define LH_MAP_ALL_TS_CHANS_m13			((ui8) 1 << 11) // useful when time series channels may be added to open session
+#define LH_MAP_ALL_VID_CHANS_m13		((ui8) 1 << 12) // useful when video channels may be added to open session
 
 #define LH_READ_SLICE_SESS_RECS_m13		((ui8) 1 << 16) // read full record indices file (close file); open data, read universal header, leave open
 #define LH_READ_FULL_SESS_RECS_m13		((ui8) 1 << 17) // read full recordindices & data files, close all files
 #define LH_MMAP_SESS_RECS_m13			((ui8) 1 << 18) // allocate, but don't read full file
 
 // segmented session records level
-#define LH_READ_SLICE_SEG_SESS_RECS_m13		((ui8) 1 << 24) // read full indices file (close file); open data, read universal header, leave open
-#define LH_READ_FULL_SEG_SESS_RECS_m13		((ui8) 1 << 25) // read full indices file & data files, close all files
-#define LH_MMAP_SEG_SESS_RECS_m13		((ui8) 1 << 26) // allocate, but don't read full data file
+#define LH_SSR_OPEN_m13				((ui8) 1 << 24) // segmented session records has been opened
+#define LH_READ_SLICE_SEG_SESS_RECS_m13		((ui8) 1 << 25) // read full indices file (close file); open data, read universal header, leave open
+#define LH_READ_FULL_SEG_SESS_RECS_m13		((ui8) 1 << 26) // read full indices file & data files, close all files
+#define LH_MMAP_SEG_SESS_RECS_m13		((ui8) 1 << 27) // allocate, but don't read full data file
 
 // channel level
-#define LH_CHAN_ACTIVE_m13			((ui8) 1 << 32) // include channel in current read set
-#define LH_IDX_CHAN_INACTIVE_m13		((ui8) 1 << 33)
-#define LH_MAP_ALL_SEGS_m13			((ui8) 1 << 34) // allocate slots for every segment, regardless of whether required for current read
+#define LH_CHAN_OPEN_m13			((ui8) 1 << 32) // channel has been opened
+#define LH_CHAN_ACTIVE_m13			((ui8) 1 << 33) // include channel in current read set
+#define LH_IDX_CHAN_INACTIVE_m13		((ui8) 1 << 34)
+#define LH_MAP_ALL_SEGS_m13			((ui8) 1 << 35) // allocate slots for every segment, regardless of whether required for current read
 // (active channels only)
 #define LH_READ_SLICE_CHAN_RECS_m13		((ui8) 1 << 40) // read full record indices file (close file); open record data, read universal header, leave open
 #define LH_READ_FULL_CHAN_RECS_m13		((ui8) 1 << 41) // read full record indices & data files, close all files
@@ -1136,8 +1139,9 @@ typedef struct {
 #define LH_THREAD_SEG_READS_m13			((ui8) 1 << 43) // set if likely to cross many segment boundaries in read (e.g. one channel, long reads or short segments)
 
 // segment level
-#define LH_NO_CPS_PTR_RESET_m13			((ui8) 1 << 48) // caller will update pointers
-#define LH_NO_CPS_CACHING_m13			((ui8) 1 << 49) // set cps_caching parameter to FALSE
+#define LH_SEG_OPEN_m13				((ui8) 1 << 48) // segment has been opened
+#define LH_NO_CPS_PTR_RESET_m13			((ui8) 1 << 49) // caller will update pointers
+#define LH_NO_CPS_CACHING_m13			((ui8) 1 << 50) // set cps_caching parameter to FALSE
 // (active channels only)
 #define LH_READ_SLICE_SEG_DATA_m13		((ui8) 1 << 56) // read full metadata & indices files, close files; open data, read universal header, leave open
 #define LH_READ_FULL_SEG_DATA_m13		((ui8) 1 << 57) // read full metadata, indices, & data files, close all files
@@ -3573,6 +3577,11 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 #define CMP_VDS_OUTPUT_BUFFERS_m13		CMP_MAK_OUTPUT_BUFFERS_m13
 #define CMP_VDS_LOWPASS_ORDER_m13		6
 #define CMP_VDS_MINIMUM_SAMPLES_m13		10
+#define CMP_SRRED_DOWN_THRESH_m13		((sf8) 0.95)
+#define CMP_SRRED_UP_THRESH_m13			((sf8) 1.02)
+#define CMP_SRRED_BIG_STEP_m13			((sf8) 0.00025)
+#define CMP_SRRED_SMALL_STEP_m13		((sf8) 0.00002)  // ((sf8) 0.00001) is better, but this is notably faster
+#define CMP_SRRED_TOP_SCALE_m13			((sf8) 0.5) // search scales from CMP_SRRED_BIG_STEP_m13 to here
 #define CMP_SELF_MANAGED_MEMORY_m13		-1 // pass CMP_SELF_MANAGED_MEMORY_m13 to CMP_allocate_processing_struct to prevent automatic re-allocation
 
 // CMP: Block Fixed Header Offset Constants
@@ -3626,12 +3635,12 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 // CMP: RED (Range Encoded Derivatives) Model Offset Constants
 #define CMP_RED_MODEL_NUMBER_OF_KEYSAMPLE_BYTES_OFFSET_m13 	0 // ui4
 #define CMP_RED_MODEL_DERIVATIVE_LEVEL_OFFSET_m13		4 // ui1
-#define CMP_RED_MODEL_PAD_BYTES_OFFSET_m13			5 // ui1[3]
+#define CMP_RED_MODEL_PAD_OFFSET_m13				5 // ui1[3]
 #define CMP_RED_MODEL_NUMBER_OF_STATISTICS_BINS_OFFSET_m13	8  // ui2
 #define CMP_RED_MODEL_FLAGS_OFFSET_m13				10 // ui2
 #define CMP_RED_MODEL_FIXED_HDR_BYTES_m13			12
 // RED Model Flags
-#define CMP_RED_FLAGS_NO_ZERO_COUNTS_m13			((ui2) 1) // bit 0
+#define CMP_RED_FLAGS_NO_ZERO_COUNTS_m13			((ui2) 1 << 0) // bit 0
 #define CMP_RED_FLAGS_POSITIVE_DERIVATIVES_m13			((ui2) 1 << 1) // bit 1
 #define CMP_RED_2_BYTE_OVERFLOWS_m13				((ui2) 1 << 2) // bit 2
 #define CMP_RED_3_BYTE_OVERFLOWS_m13				((ui2) 1 << 3) // bit 3
@@ -3640,7 +3649,7 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 // CMP: PRED (Predictive RED) Model Offset Constants
 #define CMP_PRED_MODEL_NUMBER_OF_KEYSAMPLE_BYTES_OFFSET_m13 		0 // ui4
 #define CMP_PRED_MODEL_DERIVATIVE_LEVEL_OFFSET_m13 			4 // ui1
-#define CMP_PRED_MODEL_PAD_BYTES_OFFSET_m13				5 // ui1[3]
+#define CMP_PRED_MODEL_PAD_OFFSET_m13					5 // ui1[3]
 #define CMP_PRED_MODEL_NUMBERS_OF_STATISTICS_BINS_OFFSET_m13		8 // ui2[3]
 #define CMP_PRED_MODEL_NUMBER_OF_NIL_STATISTICS_BINS_OFFSET_m13		CMP_PRED_MODEL_NUMBERS_OF_STATISTICS_BINS_OFFSET_m13 // ui2
 #define CMP_PRED_MODEL_NUMBER_OF_POS_STATISTICS_BINS_OFFSET_m13		10 // ui2
@@ -3648,20 +3657,37 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 #define CMP_PRED_MODEL_FLAGS_OFFSET_m13					14 // ui2
 #define CMP_PRED_MODEL_FIXED_HDR_BYTES_m13				16
 // PRED Model Flags
-#define CMP_PRED_FLAGS_NO_ZERO_COUNTS_m13				((ui2) 1) // bit 0
+#define CMP_PRED_FLAGS_NO_ZERO_COUNTS_m13				((ui2) 1 << 0) // bit 0
 #define CMP_PRED_FLAGS_BIT_1_m13					((ui2) 1 << 1) // bit 1 Note: this is used for positive derivatives in RED, left empty here to keep bits same
 #define CMP_PRED_2_BYTE_OVERFLOWS_m13					((ui2) 1 << 2) // bit 2
 #define CMP_PRED_3_BYTE_OVERFLOWS_m13					((ui2) 1 << 3) // bit 3
 #define CMP_PRED_OVERFLOW_BYTES_MASK_m13				( CMP_PRED_2_BYTE_OVERFLOWS_m13 | CMP_PRED_3_BYTE_OVERFLOWS_m13 )
 
+// CMP: SRRED (Scaled Residual Range Encoded Derivatives) Model Offset Constants
+#define CMP_SRRED_MODEL_SCALED_BLOCK_SCALE_OFFSET_m13			0 // sf4  (note this is independent of block header gradient parameter)
+#define CMP_SRRED_MODEL_SCALED_BLOCK_TOTAL_BYTES_OFFSET_m13		4 // ui4
+#define CMP_SRRED_MODEL_SCALED_BLOCK_MODEL_BYTES_OFFSET_m13		8 // ui2
+#define CMP_SRRED_MODEL_RESIDUALS_BLOCK_MODEL_BYTES_OFFSET_m13 		10 // ui2
+#define CMP_SRRED_MODEL_FLAGS_OFFSET_m13				12 // ui2
+#define CMP_SRRED_MODEL_PAD_OFFSET_m13					14 // ui1[2]
+#define CMP_SRRED_MODEL_FIXED_HDR_BYTES_m13				16
+// SRRED Model Flags
+#define CMP_SRRED_FLAGS_SCALED_RED_m13				((ui4) 1 << 0)  // bit 0
+#define CMP_SRRED_FLAGS_SCALED_MBE_m13				((ui4) 1 << 1)  // bit 1
+#define CMP_SRRED_FLAGS_RESIDUALS_RED_m13			((ui4) 1 << 2)  // bit 2
+#define CMP_SRRED_FLAGS_RESIDUALS_MBE_m13			((ui4) 1 << 3)  // bit 3
+#define CMP_SRRED_SCALED_ALGORITHMS_MASK_m13			( CMP_SRRED_FLAGS_SCALED_RED_m13 | CMP_SRRED_FLAGS_SCALED_MBE_m13 )
+#define CMP_SRRED_RESIDUALS_ALGORITHMS_MASK_m13			( CMP_SRRED_FLAGS_RESIDUALS_RED_m13 | CMP_SRRED_FLAGS_RESIDUALS_MBE_m13 )
+#define CMP_SRRED_ALGORITHMS_MASK_m13				( CMP_SRRED_SCALED_ALGORITHMS_MASK_m13 | CMP_SRRED_RESIDUALS_ALGORITHMS_MASK_m13 )
+
 // CMP: MBE (Minimal Bit Encoding) Model Offset Constants
-#define CMP_MBE_MODEL_MINIMUM_VALUE_OFFSET_m13		0 // si4
-#define CMP_MBE_MODEL_BITS_PER_SAMPLE_OFFSET_m13	4 // ui1
-#define CMP_MBE_MODEL_DERIVATIVE_LEVEL_OFFSET_m13 	5 // ui1
-#define CMP_MBE_MODEL_FLAGS_OFFSET_m13			6 // ui2
-#define CMP_MBE_MODEL_FIXED_HDR_BYTES_m13		8
+#define CMP_MBE_MODEL_MINIMUM_VALUE_OFFSET_m13			0 // si4
+#define CMP_MBE_MODEL_BITS_PER_SAMPLE_OFFSET_m13		4 // ui1
+#define CMP_MBE_MODEL_DERIVATIVE_LEVEL_OFFSET_m13 		5 // ui1
+#define CMP_MBE_MODEL_FLAGS_OFFSET_m13				6 // ui2
+#define CMP_MBE_MODEL_FIXED_HDR_BYTES_m13			8
 // MBE Model Flags
-#define CMP_MBE_FLAGS_PREPROCESSED_MASK_m13		( (ui2) 1 ) // bit 0 - message to MBE_encode()) it will clear it
+#define CMP_MBE_FLAGS_PREPROCESSED_MASK_m13		((ui2) 1 << 0) // bit 0 - message to MBE_encode()) it will clear it
 
 // CMP: VDS (Vectorized Data Stream) Model Offset Constants
 #define CMP_VDS_MODEL_NUMBER_OF_VDS_SAMPLES_OFFSET_m13		0 // ui4
@@ -3671,7 +3697,7 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 #define CMP_VDS_MODEL_FLAGS_OFFSET_m13				12 // ui4 (more options for VDS)
 #define CMP_VDS_MODEL_FIXED_HDR_BYTES_m13			16
 // VDS Model Flags
-#define CMP_VDS_FLAGS_AMPLITUDE_RED1_m13	((ui4) 1)  // bit 0
+#define CMP_VDS_FLAGS_AMPLITUDE_RED1_m13	((ui4) 1 << 0)  // bit 0
 #define CMP_VDS_FLAGS_AMPLITUDE_PRED1_m13	((ui4) 1 << 1)  // bit 1
 #define CMP_VDS_FLAGS_AMPLITUDE_MBE_m13		((ui4) 1 << 2)  // bit 2
 #define CMP_VDS_FLAGS_AMPLITUDE_RED2_m13	((ui4) 1 << 3)  // bit 3
@@ -3681,31 +3707,34 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 #define CMP_VDS_FLAGS_TIME_MBE_m13		((ui4) 1 << 7)  // bit 7
 #define CMP_VDS_FLAGS_TIME_RED2_m13		((ui4) 1 << 8)  // bit 8
 #define CMP_VDS_FLAGS_TIME_PRED2_m13		((ui4) 1 << 9)  // bit 9
-#define CMP_VDS_AMPLITUDE_ALGORITHMS_MASK_m13	( CMP_VDS_FLAGS_AMPLITUDE_RED1_m13 | CMP_VDS_FLAGS_AMPLITUDE_PRED1_m13 | CMP_VDS_FLAGS_AMPLITUDE_MBE_m13 | \
-						CMP_VDS_FLAGS_AMPLITUDE_RED2_m13 | CMP_VDS_FLAGS_AMPLITUDE_PRED2_m13 )
-#define CMP_VDS_TIME_ALGORITHMS_MASK_m13	( CMP_VDS_FLAGS_TIME_RED1_m13 | CMP_VDS_FLAGS_TIME_PRED1_m13 | CMP_VDS_FLAGS_TIME_MBE_m13 | \
-						CMP_VDS_FLAGS_TIME_RED2_m13 | CMP_VDS_FLAGS_TIME_PRED2_m13 )
+#define CMP_VDS_AMPLITUDE_ALGORITHMS_MASK_m13	( CMP_VDS_FLAGS_AMPLITUDE_RED1_m13 | CMP_VDS_FLAGS_AMPLITUDE_PRED1_m13 | CMP_VDS_FLAGS_AMPLITUDE_MBE_m13 \
+						| CMP_VDS_FLAGS_AMPLITUDE_RED2_m13 | CMP_VDS_FLAGS_AMPLITUDE_PRED2_m13 )
+#define CMP_VDS_TIME_ALGORITHMS_MASK_m13	( CMP_VDS_FLAGS_TIME_RED1_m13 | CMP_VDS_FLAGS_TIME_PRED1_m13 | CMP_VDS_FLAGS_TIME_MBE_m13 \
+						| CMP_VDS_FLAGS_TIME_RED2_m13 | CMP_VDS_FLAGS_TIME_PRED2_m13 )
 #define CMP_VDS_ALGORITHMS_MASK_m13		( CMP_VDS_AMPLITUDE_ALGORITHMS_m13 | CMP_VDS_TIME_ALGORITHMS_m13 )
 
 // CMP Block Flag Masks
-#define CMP_BF_BLOCK_FLAG_BITS_m13	32
-#define CMP_BF_DISCONTINUITY_m13	((ui4) 1)  // bit 0
-#define CMP_BF_ENCRYPTED_m13		((ui4) 1 << 1)  // bit 1 (block is currently encrypted - get level from universal header)
-#define CMP_BF_RED1_ENCODING_m13	((ui4) 1 << 8)  // bit 8
-#define CMP_BF_PRED1_ENCODING_m13	((ui4) 1 << 9)  // bit 9
-#define CMP_BF_MBE_ENCODING_m13		((ui4) 1 << 10)  // bit 10
-#define CMP_BF_VDS_ENCODING_m13		((ui4) 1 << 11)  // bit 11
-#define CMP_BF_RED2_ENCODING_m13	((ui4) 1 << 12)  // bit 12 (faster, used as default RED version)
-#define CMP_BF_PRED2_ENCODING_m13	((ui4) 1 << 13)  // bit 13 (faster, used as default PRED version)
+#define CMP_BF_BLOCK_FLAG_BITS_m13		32
+#define CMP_BF_DISCONTINUITY_m13		((ui4) 1 << 0)  // bit 0
+#define CMP_BF_ENCRYPTED_m13			((ui4) 1 << 1)  // bit 1 (block is currently encrypted - get level from universal header)
+#define CMP_BF_RED1_ENCODING_m13		((ui4) 1 << 8)  // bit 8
+#define CMP_BF_PRED1_ENCODING_m13		((ui4) 1 << 9)  // bit 9
+#define CMP_BF_MBE_ENCODING_m13			((ui4) 1 << 10)  // bit 10
+#define CMP_BF_VDS_ENCODING_m13			((ui4) 1 << 11)  // bit 11
+#define CMP_BF_RED2_ENCODING_m13		((ui4) 1 << 12)  // bit 12 (fastest lossless)
+#define CMP_BF_PRED2_ENCODING_m13		((ui4) 1 << 13)  // bit 13 (fast lossless; better compression than RED)
+#define CMP_BF_SRRED_ENCODING_m13		((ui4) 1 << 14)  // bit 14 (slower lossless; better compression than PRED)
+#define CMP_BF_SSE_ENCODING_m13			((ui4) 1 << 15)  // bit 15 (fastest compression; compression ratio highly data-dependent)
 
-#define CMP_BF_ALGORITHMS_MASK_m13	( CMP_BF_RED1_ENCODING_m13 | CMP_BF_PRED1_ENCODING_m13 | CMP_BF_MBE_ENCODING_m13 | \
-					CMP_BF_VDS_ENCODING_m13 | CMP_BF_RED2_ENCODING_m13 | CMP_BF_PRED2_ENCODING_m13 )
+#define CMP_BF_ALGORITHMS_MASK_m13		( CMP_BF_RED1_ENCODING_m13 | CMP_BF_PRED1_ENCODING_m13 | CMP_BF_MBE_ENCODING_m13 \
+						| CMP_BF_VDS_ENCODING_m13 | CMP_BF_RED2_ENCODING_m13 | CMP_BF_PRED2_ENCODING_m13 \
+						| CMP_BF_SRRED_ENCODING_m13 )
 // CMP Parameter Map Indices
-#define CMP_PF_INTERCEPT_IDX_m13			((ui4) 0) // bit 0
-#define CMP_PF_GRADIENT_IDX_m13				((ui4) 1) // bit 1
-#define CMP_PF_AMPLITUDE_SCALE_IDX_m13			((ui4) 2) // bit 2
-#define CMP_PF_FREQUENCY_SCALE_IDX_m13			((ui4) 3) // bit 3
-#define CMP_PF_NOISE_SCORES_IDX_m13			((ui4) 4) // bit 4
+#define CMP_PF_INTERCEPT_IDX_m13		((ui4) 0) // parameter flags bit 0
+#define CMP_PF_GRADIENT_IDX_m13			((ui4) 1) // parameter flags bit 1
+#define CMP_PF_AMPLITUDE_SCALE_IDX_m13		((ui4) 2) // parameter flags bit 2
+#define CMP_PF_FREQUENCY_SCALE_IDX_m13		((ui4) 3) // parameter flags bit 3
+#define CMP_PF_NOISE_SCORES_IDX_m13		((ui4) 4) // parameter flags bit 4
 
 // CMP Parameter Flag Masks
 #define CMP_PF_PARAMETER_FLAG_BITS_m13		32
@@ -3724,13 +3753,15 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 #define CMP_AMPLITUDE_SCALE_MODE_m13		((ui1) 1)
 #define CMP_FREQUENCY_SCALE_MODE_m13		((ui1) 2)
 
-// Compression Algorithms (use CMP block flags codes)
+// Compression Algorithms (use CMP block flag codes)
 #define CMP_RED1_COMPRESSION_m13	CMP_BF_RED1_ENCODING_m13
 #define CMP_RED2_COMPRESSION_m13	CMP_BF_RED2_ENCODING_m13
 #define CMP_RED_COMPRESSION_m13		CMP_RED2_COMPRESSION_m13 // use RED v2 as default RED
 #define CMP_PRED1_COMPRESSION_m13	CMP_BF_PRED1_ENCODING_m13
 #define CMP_PRED2_COMPRESSION_m13	CMP_BF_PRED2_ENCODING_m13
 #define CMP_PRED_COMPRESSION_m13	CMP_PRED2_COMPRESSION_m13 // use PRED v2 as default PRED
+#define CMP_SRRED_COMPRESSION_m13	CMP_BF_SRRED_ENCODING_m13
+#define CMP_SSE_COMPRESSION_m13		CMP_BF_SSE_ENCODING_m13
 #define CMP_MBE_COMPRESSION_m13		CMP_BF_MBE_ENCODING_m13
 #define CMP_VDS_COMPRESSION_m13		CMP_BF_VDS_ENCODING_m13
 
@@ -3743,20 +3774,24 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 #define CPS_DF_PRED1_ALGORITHM_m13			((ui8) 1 << 3)
 #define CPS_DF_PRED2_ALGORITHM_m13			((ui8) 1 << 4)
 #define CPS_DF_PRED_ALGORITHM_m13			CPS_DF_PRED2_ALGORITHM_m13 // default PRED
-#define CPS_DF_VDS_ALGORITHM_m13			((ui8) 1 << 5)
-#define CPS_DF_MBE_ALGORITHM_m13			((ui8) 1 << 6)
-#define CPS_DF_CPS_POINTER_RESET_m13			((ui8) 1 << 7)
-#define CPS_DF_CPS_CACHING_m13				((ui8) 1 << 8)
-#define CPS_DF_FALL_THROUGH_TO_BEST_ENCODING_m13	((ui8) 1 << 9)
-#define CPS_DF_RESET_DISCONTINUITY_m13			((ui8) 1 << 10)
-#define CPS_DF_INCLUDE_NOISE_SCORES_m13			((ui8) 1 << 11)
-#define CPS_DF_NO_ZERO_COUNTS_m13			((ui8) 1 << 12)
-#define CPS_DF_SET_OVERFLOW_BYTES_m13			((ui8) 1 << 13) // user sets value in parameters
-#define CPS_DF_FIND_OVERFLOW_BYTES_m13			((ui8) 1 << 14) // determine overflow bytes on a block by block basis
-#define CPS_DF_POSITIVE_DERIVATIVES_m13 		((ui8) 1 << 15)
-#define CPS_DF_SET_DERIVATIVE_LEVEL_m13			((ui8) 1 << 16)	 // user sets level in parameters
-#define CPS_DF_FIND_DERIVATIVE_LEVEL_m13		((ui8) 1 << 17)
-#define CPS_DF_CONVERT_TO_NATIVE_UNITS_m13		((ui8) 1 << 18)
+#define CPS_DF_SRRED_ALGORITHM_m13			((ui8) 1 << 5)
+#define CPS_DF_SSE_ALGORITHM_m13			((ui8) 1 << 6)
+#define CPS_DF_MBE_ALGORITHM_m13			((ui8) 1 << 7)
+#define CPS_DF_VDS_ALGORITHM_m13			((ui8) 1 << 8)
+
+#define CPS_DF_CPS_POINTER_RESET_m13			((ui8) 1 << 12)
+#define CPS_DF_CPS_CACHING_m13				((ui8) 1 << 13)
+#define CPS_DF_FALL_THROUGH_TO_BEST_ENCODING_m13	((ui8) 1 << 14)
+#define CPS_DF_RESET_DISCONTINUITY_m13			((ui8) 1 << 15)
+#define CPS_DF_INCLUDE_NOISE_SCORES_m13			((ui8) 1 << 16)
+#define CPS_DF_NO_ZERO_COUNTS_m13			((ui8) 1 << 17)
+#define CPS_DF_SET_OVERFLOW_BYTES_m13			((ui8) 1 << 18) // user sets value in parameters
+#define CPS_DF_FIND_OVERFLOW_BYTES_m13			((ui8) 1 << 19) // determine overflow bytes on a block by block basis
+#define CPS_DF_POSITIVE_DERIVATIVES_m13 		((ui8) 1 << 20)
+#define CPS_DF_SET_DERIVATIVE_LEVEL_m13			((ui8) 1 << 21)	 // user sets level in parameters
+#define CPS_DF_FIND_DERIVATIVE_LEVEL_m13		((ui8) 1 << 22)
+#define CPS_DF_CONVERT_TO_NATIVE_UNITS_m13		((ui8) 1 << 23)
+
 // directives flags (lossy)
 #define CPS_DF_DETREND_DATA_m13				((ui8) 1 << 32)
 #define CPS_DF_REQUIRE_NORMALITY_m13			((ui8) 1 << 33)
@@ -3772,12 +3807,15 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 
 // masks
 #define CPS_DF_ALGORITHM_MASK_m13			( CPS_DF_RED1_ALGORITHM_m13 | CPS_DF_PRED1_ALGORITHM_m13 | CPS_DF_RED2_ALGORITHM_m13 | \
-							CPS_DF_PRED2_ALGORITHM_m13 | CPS_DF_VDS_ALGORITHM_m13 | CPS_DF_MBE_ALGORITHM_m13 )
+							CPS_DF_PRED2_ALGORITHM_m13 | CPS_DF_VDS_ALGORITHM_m13 | CPS_DF_MBE_ALGORITHM_m13 | \
+							CPS_DF_SRRED_ALGORITHM_m13 | CPS_DF_SSE_ALGORITHM_m13 )
 
 // directive defaults
 #define CPS_DIRECTIVES_COMPRESSION_MODE_DEFAULT_m13			FALSE_m13 // TRUE_m13 == compression, FALSE_m13 == decompression
 #define CPS_DIRECTIVES_RED_ALGORITHM_DEFAULT_m13			FALSE_m13 // algorithm defaults are mutually exclusive (one, & only one, must be true)
 #define CPS_DIRECTIVES_PRED_ALGORITHM_DEFAULT_m13			TRUE_m13 // algorithm defaults are mutually exclusive (one, & only one, must be true)
+#define CPS_DIRECTIVES_SRRED_ALGORITHM_DEFAULT_m13			FALSE_m13 // algorithm defaults are mutually exclusive (one, & only one, must be true)
+#define CPS_DIRECTIVES_SSE_ALGORITHM_DEFAULT_m13			FALSE_m13 // algorithm defaults are mutually exclusive (one, & only one, must be true)
 #define CPS_DIRECTIVES_VDS_ALGORITHM_DEFAULT_m13			FALSE_m13 // algorithm defaults are mutually exclusive (one, & only one, must be true)
 #define CPS_DIRECTIVES_MBE_ALGORITHM_DEFAULT_m13			FALSE_m13 // algorithm defaults are mutually exclusive (one, & only one, must be true)
 #define CPS_DIRECTIVES_LEVEL_1_ENCRYPTION_DEFAULT_m13			FALSE_m13 // encryption defaults are mutually exclusive (one, & only one, can be true, but neither must be)
@@ -3815,6 +3853,13 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 #define CPS_PARAMS_DISCONTINUITY_DEFAULT_m13			UNKNOWN_m13
 #define CPS_PARAMS_DERIVATIVE_LEVEL_DEFAULT_m13			((ui1) 1)
 #define CPS_PARAMS_OVERFLOW_BYTES_DEFAULT_m13			4
+// parameters defaults (SRRED)
+#define CMP_PARAMS_SRRED_TEST_SAMPLES_MINIMUM_m13		((ui4) 3000)
+#define CMP_PARAMS_SRRED_TEST_SAMPLES_DEFAULT_m13		((ui4) 5000)
+#define CMP_PARAMS_SRRED_TEST_SAMPLES_BLOCK_m13			((ui4) 0xFFFFFFFF) // use full block samples, unless < CMP_VDS_MINIMUM_SAMPLES_m13
+#define CMP_PARAMS_SRRED_NO_UPDATES_m13				((sf8) -1.0) // measure once & never update (fast, but does not allow for dift)
+#define CMP_PARAMS_SRRED_CONTINUOUS_UPDATES_m13			((sf8) 0.0) // measure for every block (slow, but best compression)
+#define CMP_PARAMS_SRRED_UPDATE_INTERVAL_DEFAULT_m13		((sf8) 60.0) // update once a minute (in sample time)
 // parameters defaults (lossy)
 #define CPS_PARAMS_GOAL_RATIO_DEFAULT_m13			((sf8) 0.05)
 #define CPS_PARAMS_GOAL_TOLERANCE_DEFAULT_m13			((sf8) 0.005)
@@ -3829,6 +3874,7 @@ si1		*STR_wchar2char_m13(si1 *target, const wchar_t *source);
 #define CMP_USER_PARAMETER_FLAGS_DEFAULT_m13			((ui4) 0)
 #define CMP_PROTECTED_REGION_BYTES_DEFAULT_m13			((ui2) 0)
 #define CMP_USER_DISCRETIONARY_REGION_BYTES_DEFAULT_m13		((ui2) 0)
+
 
 // RED/PRED Codec Constants
 #define CMP_SI1_KEYSAMPLE_FLAG_m13 		((si1) 0x80)  // -128 as si1
@@ -4023,6 +4069,15 @@ typedef struct { // requires 4-byte alignment
 } CMP_PRED_MODEL_FIXED_HDR_m13;
 
 typedef struct { // requires 4-byte alignment
+	sf4	scale;
+	ui4	scaled_block_total_bytes;
+	ui2	scaled_block_model_bytes;
+	ui2	residuals_block_model_bytes;
+	ui2	flags;
+	ui1	pad[2];
+} CMP_SRRED_MODEL_FIXED_HDR_m13;
+
+typedef struct { // requires 4-byte alignment
 	si4	minimum_value; // of highest derivative
 	ui1	bits_per_sample;
 	ui1	derivative_level;
@@ -4049,7 +4104,7 @@ typedef struct {
 typedef struct {
 	ui4 count;
 	union {
-		si1 value;
+		si1	value;
 		ui1	pos_value;
 	};
 } CMP_STATISTICS_BIN_m13;
@@ -4120,6 +4175,13 @@ typedef struct {
 	ui4	variable_region_bytes; // value calculated and set by library based on parameters & directives
 	ui4	n_derivative_bytes; // values in derivative or difference buffer
 	
+ // lossless compression parameters
+	ui4	SRRED_test_samples; // smaller sizes increase speed, (CMP_PARAMS_SRRED_TEST_SAMPLES_BLOCK_m13 uses full block (most acccurate), unless < CMP_PARAMS_SRRED_TEST_SAMPLES_MINIMUM_m13)
+	sf8	SRRED_update_interval; // time, in seconds, between updates
+				       // CMP_PARAMS_SRRED_CONTINUOUS_UPDATES_m13 (0.0) == update with every block
+				       // CMP_PARAMS_SRRED_NO_UPDATES_m13 (-1.0) == measure only at startup & do not update
+	si8	SRRED_update_time; // uutc of next update; used with SRRED_update_interval
+
  // lossy compression parameters
 	sf8	goal_ratio; // either compression ratio or mean residual ratio
 	sf8	actual_ratio; // either compression ratio or mean residual ratio
@@ -4185,7 +4247,7 @@ tern	CMP_decrypt_m13(FPS_m13 *fps); // single block decrypt (see also decrypt_ti
 tern	CMP_detrend_m13(si4 *input_buffer, si4 *output_buffer, si8 len, CPS_m13 *cps);
 tern	CMP_detrend_sf8_m13(sf8 *input_buffer, sf8 *output_buffer, si8 len);
 ui1	CMP_differentiate_m13(CPS_m13 *cps);
-sf8	CMP_dispersion_m13(CPS_m13 *cps, si4 *deriv_p, ui1 n_derivs);
+ui1	CMP_dispersion_m13(CPS_m13 *cps, si4 *deriv_p, ui1 n_derivs);
 tern	CMP_encode_m13(FPS_m13 *fps, si8 start_time, si4 acquisition_channel_number, ui4 n_samples);
 tern	CMP_encrypt_m13(FPS_m13 *fps); // single block encrypt (see also encrypt_time_series_data_m13)
 tern	CMP_find_amplitude_scale_m13(CPS_m13 *cps, tern (*compression_f)(CPS_m13 *cps));
@@ -4240,6 +4302,7 @@ tern	CMP_RED1_decode_m13(CPS_m13 *cps);
 tern	CMP_RED2_decode_m13(CPS_m13 *cps);
 tern	CMP_RED1_encode_m13(CPS_m13 *cps);
 tern	CMP_RED2_encode_m13(CPS_m13 *cps);
+si8	CMP_range_encode_m13(si4 *derivatives, si8 n_samps, ui1 deriv_level);
 tern	CMP_retrend_si4_m13(si4 *in_y, si4 *out_y, si8 len, sf8 m, sf8 b);
 tern	CMP_retrend_2_sf8_m13(sf8 *in_x, sf8 *in_y, sf8 *out_y, si8 len, sf8 m, sf8 b);
 si2	CMP_round_si2_m13(sf8 val);
@@ -4257,6 +4320,9 @@ tern	CMP_si4_to_sf8_m13(si4 *si4_arr, sf8 *sf8_arr, si8 len);
 sf8	*CMP_spline_interp_sf8_m13(sf8 *in_data, si8 in_len, sf8 *out_data, si8 out_len, CMP_BUFFERS_m13 *spline_bufs);
 si4	*CMP_spline_interp_si4_m13(si4 *in_data, si8 in_len, si4 *out_data, si8 out_len, CMP_BUFFERS_m13 *spline_bufs);
 sf8	CMP_splope_m13(sf8 *xa, sf8 *ya, sf8 *d2y, sf8 x, si8 lo_pt, si8 hi_pt);
+tern	CMP_SRRED_decode_m13(CPS_m13 *cps);
+tern	CMP_SRRED_encode_m13(CPS_m13 *cps);
+tern	CMP_SRRED_find_parameters_m13(CPS_m13 *cps);
 sf8	CMP_trace_amplitude_m13(sf8 *y, sf8 *buffer, si8 len, tern detrend);
 si8	CMP_ts_sort_m13(si4 *x, si8 len, CMP_NODE_m13 *nodes, CMP_NODE_m13 *head, CMP_NODE_m13 *tail, si4 return_sorted_ts, ...);
 tern	CMP_unlock_buffers_m13(CMP_BUFFERS_m13 *buffers);
